@@ -26,7 +26,11 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "arm.h"
+#include "adc_io.h"
+#include "uart_io.h"
+#include "usb_io.h"
+#include "arm_protocol.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -41,7 +45,28 @@
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-
+/*
+               _ooOoo_
+              o8888888o
+              88" . "88
+              (| -_- |)
+              O\  =  /O
+           ____/`---'\____
+         .'  \\|     |//  `.
+        /  \\|||  :  |||//  \
+        /  _||||| -:- |||||-  \
+        |   | \\\  -  /// |   |
+       | \_|  ''\---/''  |   |
+       \  .-\__  `-`  ___/-. /
+     ___`. .'  /--.--\  `. . __
+    ."" '<  `.___\_<|>_/___.'  >'"".
+    | | :  `- \`.;`\ _ /`;.`/ - ` : | |
+    \  \ `-.   \_ __\ /__ _/   .-` /  /
+======`-.____`-.___\_____/___.-`____.-'======
+               `=---='
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        佛祖保佑           永无BUG
+*/
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
@@ -96,7 +121,17 @@ int main(void)
   MX_USART1_UART_Init();
   MX_USB_DEVICE_Init();
   /* USER CODE BEGIN 2 */
+  ADC_Init();
+  UART_Init();
+  Arm_Init();
+  uint32_t arm_tick = HAL_GetTick();
 
+  /* 七路 PWM 默认关闭，需显式使能后才输出
+   * 标定完成后可参考以下用法
+   * Servo_SetTarget(&arm_servos[ARM_SERVO_H3], 135.0f);
+   * Servo_Enable(&arm_servos[ARM_SERVO_H3], 1U);
+   * Arm_Enable(1U);  // 使能六轴，备用 H10 仍保持关闭
+   */
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -106,6 +141,18 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    uint32_t now = HAL_GetTick();
+    if ((uint32_t)(now - arm_tick) >= SERVO_CONTROL_PERIOD_MS) {
+      arm_tick = now;
+      Arm_Update();
+    }
+
+    /* 后续在此接入上位机协议解析，下面两个读取接口均不阻塞
+     * uint8_t bytes[64];
+     * uint16_t count = USB_Read(bytes, sizeof(bytes));
+     * count = UART_Read(bytes, sizeof(bytes));
+     * 将各自的字节流分别送入后续的 arm_protocol 解析器
+     */
   }
   /* USER CODE END 3 */
 }
