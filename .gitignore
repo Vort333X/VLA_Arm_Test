@@ -1,2 +1,4 @@
 /Arm_6Axis/cmake-build-debug/
 /.idea
+Arm_6Axis/.idea/runConfigurations/OCD_Arm_6Axis.xml
+Arm_6Axis/.cproject

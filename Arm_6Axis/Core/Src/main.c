@@ -138,6 +138,14 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+      HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
+
+    Servo_t *joint = &arm_servos[ARM_SERVO_H3 ];
+
+    Servo_SetClosedLoop(joint, 0U);  // 反馈尚未标定，先关闭外环
+    Servo_SetTarget(joint, 135.0f);  // 设置中位
+    Servo_Enable(joint, 1U);        // 开始输出 PWM
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -153,6 +161,7 @@ int main(void)
      * count = UART_Read(bytes, sizeof(bytes));
      * 将各自的字节流分别送入后续的 arm_protocol 解析器
      */
+    HAL_Delay(1);
   }
   /* USER CODE END 3 */
 }
