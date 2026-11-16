@@ -2,9 +2,12 @@
 #include "ring_buffer.h"
 #include <string.h>
 
-static RingBuffer_t rx_ring;
+#define UART_BUFFER_SIZE 256U
+
+static uint8_t rx_buffer[UART_BUFFER_SIZE];
+static RingBuffer_t rx_ring = {.data = rx_buffer, .capacity = sizeof(rx_buffer)};
 static uint8_t rx_byte;
-static uint8_t tx_buffer[COMM_BUFFER_SIZE];
+static uint8_t tx_buffer[UART_BUFFER_SIZE];
 
 void UART_Init(void)
 {

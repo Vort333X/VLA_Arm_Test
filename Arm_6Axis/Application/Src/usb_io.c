@@ -1,19 +1,39 @@
 #include "usb_io.h"
+#include "arm_protocol.h"
 #include "ring_buffer.h"
 #include <string.h>
 
 extern USBD_HandleTypeDef hUsbDeviceFS;
-static RingBuffer_t rx_ring;
-static uint8_t tx_buffer[COMM_BUFFER_SIZE];
+static uint8_t rx_buffer[1024];
+static RingBuffer_t rx_ring = {.data = rx_buffer, .capacity = sizeof(rx_buffer)};
+static uint8_t tx_buffer[ARM_PROTOCOL_FRAME_SIZE];
+static volatile uint32_t session;
 
 uint16_t USB_Read(uint8_t *data, uint16_t capacity)
 {
-    return RingBuffer_Read(&rx_ring, data, capacity);
+    /* 防止 CDC 会话切换时中断清空正在读取的缓冲 */
+    uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    uint16_t count = RingBuffer_Read(&rx_ring, data, capacity);
+    __set_PRIMASK(primask);
+    return count;
 }
 
 void USB_OnReceive(const uint8_t *data, uint16_t length)
 {
     RingBuffer_Write(&rx_ring, data, length);
+}
+
+void USB_OnSessionChange(void)
+{
+    rx_ring.head = 0U;
+    rx_ring.tail = 0U;
+    ++session;
+}
+
+uint32_t USB_Session(void)
+{
+    return session;
 }
 
 uint8_t USB_Send(const uint8_t *data, uint16_t length)

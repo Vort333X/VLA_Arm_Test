@@ -8,5 +8,8 @@ uint16_t USB_Read(uint8_t *data, uint16_t capacity);
 uint8_t USB_Send(const uint8_t *data, uint16_t length);
 /* 仅在 CDC_Receive_FS 中调用，先保存接收数据，再重新挂接 OUT 端点 */
 void USB_OnReceive(const uint8_t *data, uint16_t length);
+/* CDC 建立或结束会话时清空接收缓冲 */
+void USB_OnSessionChange(void);
+uint32_t USB_Session(void);
 
 #endif
