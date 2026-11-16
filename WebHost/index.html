@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <title>机械臂 USB 调试台</title>
+    <link rel="stylesheet" href="styles.css">
+    <script type="module" src="app.mjs"></script>
+</head>
+<body>
+    <header class="bar">
+        <div class="shell bar-inner">
+            <div class="identity">
+                <span class="product">VLA / ARM</span>
+                <h1>机械臂 USB 调试台</h1>
+            </div>
+            <div class="connect">
+                <span id="link-state" class="badge" role="status">未连接</span>
+                <button id="connect" class="primary" type="button">连接 USB</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="shell">
+        <div class="workspace">
+            <section class="panel view-panel" aria-labelledby="view-title">
+                <div class="panel-head">
+                    <div>
+                        <p class="eyebrow">底座坐标系 · mm</p>
+                        <h2 id="view-title">整臂示意</h2>
+                    </div>
+                    <label class="button file-button">导入模型<input id="model-file" type="file" accept=".json,application/json" aria-label="导入实测模型 JSON"></label>
+                </div>
+                <div class="viewport">
+                    <canvas id="arm-view" aria-label="机械臂关节与末端示意"></canvas>
+                    <div id="model-empty" class="empty-model">
+                        <span class="crosshair" aria-hidden="true"></span>
+                        <strong>等待实测参数</strong>
+                        <p>导入轴心、转轴方向和 TCP 坐标后，这里会显示整臂</p>
+                    </div>
+                </div>
+                <footer class="view-footer">
+                    <span id="model-status">模型未配置</span>
+                    <output id="tcp">X —　Y —　Z —</output>
+                </footer>
+            </section>
+
+            <section class="panel control-panel" aria-labelledby="control-title">
+                <div class="panel-head">
+                    <div><p class="eyebrow">USB CDC · 协议 V1</p><h2 id="control-title">单轴调试</h2></div>
+                </div>
+                <div class="control-body">
+                    <label for="joint">舵机通道</label>
+                    <select id="joint"></select>
+                    <form id="target-form">
+                        <label for="target">目标舵机角度</label>
+                        <div class="angle-input"><input id="target" type="number" min="0" max="270" step="0.01" inputmode="decimal" required placeholder="0–270"><span>°</span></div>
+                        <button id="send" type="submit" class="primary" disabled>发送目标</button>
+                    </form>
+                    <div class="servo-switch">
+                        <button id="enable" type="button" disabled>使能 PWM</button>
+                        <button id="disable" type="button" disabled>关闭 PWM</button>
+                    </div>
+                    <p id="control-result" class="hint" role="status">连接并通过握手后可发送指令</p>
+                </div>
+            </section>
+        </div>
+
+        <section class="panel monitor" aria-labelledby="monitor-title">
+            <div class="panel-head">
+                <div><h2 id="monitor-title">六轴反馈</h2></div>
+                <span id="snapshot-status" class="hint mono">等待回包</span>
+            </div>
+            <div class="table-scroll">
+                <table>
+                    <thead><tr><th scope="col">通道</th><th scope="col">板端目标 °</th><th scope="col">板端反馈 °</th><th scope="col">ADC 原始值</th><th scope="col">PWM</th></tr></thead>
+                    <tbody id="axis-table"></tbody>
+                </table>
+            </div>
+            <p class="table-note hint">板端反馈角取决于固件 ADC 标定，可用原始值逐轴校准</p>
+        </section>
+
+        <div class="workspace lower">
+            <section class="panel trace-panel" aria-labelledby="trace-title">
+                <div class="panel-head">
+                    <div><h2 id="trace-title">H3 响应曲线</h2><p id="trace-legend" class="hint">目标 / 板端反馈 · 最近 30 秒</p></div>
+                    <select id="trace-mode" aria-label="曲线数据"><option value="angle">角度</option><option value="adc">ADC</option></select>
+                </div>
+                <div class="trace-region"><canvas id="trace" aria-label="所选通道反馈曲线"></canvas><p id="trace-empty" class="hint">有反馈数据后显示曲线</p></div>
+            </section>
+            <section class="panel log-panel" aria-labelledby="log-title">
+                <div class="panel-head"><h2 id="log-title">通信记录</h2><button id="clear-log" type="button">清空</button></div>
+                <ol id="log"><li class="hint">等待连接</li></ol>
+            </section>
+        </div>
+    </main>
+</body>
+</html>
