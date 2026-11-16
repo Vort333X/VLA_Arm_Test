@@ -52,7 +52,7 @@ include_directories(Application/Inc ${includes})
 
 add_definitions(${defines})
 
-file(GLOB_RECURSE SOURCES "Application/*.c" ${sources})
+file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "Application/*.*" ${sources})
 
 set(LINKER_SCRIPT $${CMAKE_SOURCE_DIR}/${linkerScript})
 
