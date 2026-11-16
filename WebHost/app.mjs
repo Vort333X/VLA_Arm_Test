@@ -1,13 +1,18 @@
-import { AXES, CMD, MSG, checkAck, decodeFeedback, targetPayload } from './protocol.mjs';
+import { AXES, CMD, MSG, VERSION, checkAck, decodeFeedback, targetsPayload } from './protocol.mjs';
 import { ArmSerial } from './serial.mjs';
-import { ArmView, feedbackAngles, forward, readModel } from './arm-model.mjs';
+import { ArmView, forward, readModel } from './arm-model.mjs';
 
 const POLL_MS = 200;
 const STALE_MS = 1000;
 const HISTORY_MS = 30_000;
+const SERVO_CENTER = 135;
 const $ = id => document.getElementById(id);
+$('protocol-label').textContent = `USART1 · 协议 V${VERSION}`;
 const axisTable = $('axis-table');
 const angleInput = $('target');
+const modelAngle = $('model-angle');
+const modelFollow = $('model-follow');
+const reverseButton = $('model-reverse');
 const edits = AXES.map(() => '');
 const rows = AXES.map((port, index) => {
     $('joint').append(new Option(port, String(index)));
@@ -34,6 +39,9 @@ let logFault = false;
 let history = [];
 let model = null;
 let modelSpan = 0;
+const modelTargets = AXES.map(() => SERVO_CENTER);
+const modelDirections = AXES.map(() => 1);
+let modelDraft = null;
 const armView = new ArmView($('arm-view'), port => selectJoint(AXES.indexOf(port)));
 const formatAngle = value => value.toFixed(2);
 const clockText = () => new Date().toLocaleTimeString('zh-CN', { hour12: false });
@@ -59,10 +67,15 @@ function result(message, level = 'info') {
 function updateControls() {
     const connect = $('connect');
     connect.disabled = !navigator.serial || phase === 'opening' || phase === 'closing';
-    connect.textContent = phase === 'ready' ? '断开' : '连接 USB';
+    connect.textContent = phase === 'ready' ? '断开' : '连接串口';
     const busy = phase !== 'ready' || operation === 'command' || !!queued;
     for (const id of ['send', 'disable']) $(id).disabled = busy;
     $('enable').disabled = busy || !feedbackFresh();
+    const modelAxis = model?.joints.some(joint => joint.port === AXES[selected]);
+    const modelBusy = modelFollow.checked && (busy || !feedbackFresh());
+    modelAngle.disabled = reverseButton.disabled = !modelAxis || modelBusy;
+    $('model-home').disabled = !model || modelBusy;
+    modelFollow.disabled = !model || operation === 'command' || !!queued || (!modelFollow.checked && !feedbackFresh());
 }
 
 function setPhase(next, text) {
@@ -74,6 +87,7 @@ function setPhase(next, text) {
 
 function selectJoint(index) {
     if (index < 0) return;
+    modelDraft = null;
     selected = index;
     $('joint').value = String(index);
     angleInput.value = edits[index];
@@ -97,14 +111,30 @@ function renderFeedback() {
     });
     $('snapshot-status').textContent = latest ? (fresh ? `回包 ${lastReplyTime}` : `反馈已过期 · ${lastReplyTime}`) : '等待回包';
     updateControls();
-    if (model) {
-        const angles = latest && feedbackAngles(model, latest);
-        const pose = forward(model, angles || model.joints.map(() => 0));
-        $('model-status').textContent = angles ? (fresh ? '反馈推算姿态' : '反馈姿态已过期') : '参考姿态 · 等待 ADC 标定与反馈';
-        $('tcp').textContent = pose.tcp.map((value, index) => `${'XYZ'[index]} ${value.toFixed(1)}`).join('　');
-        armView.setPose(pose, AXES[selected], modelSpan);
-    }
+    renderModel();
     drawTrace();
+}
+
+function renderModel() {
+    if (!model) return;
+    const ports = model.joints.map(joint => AXES.indexOf(joint.port));
+    const angles = ports.map(axis => {
+        const target = axis === selected && modelDraft !== null ? modelDraft : modelTargets[axis];
+        return (target - SERVO_CENTER) * modelDirections[axis];
+    });
+    const angle = angles[ports.indexOf(selected)];
+    modelAngle.value = angle ?? 0;
+    $('model-axis').textContent = `${AXES[selected]} 偏角`;
+    $('model-angle-value').textContent = angle === undefined ? '—' : `${formatAngle(angle)}°`;
+    reverseButton.setAttribute('aria-pressed', String(modelDirections[selected] === -1));
+    const pose = forward(model, angles);
+    let status = modelFollow.checked ? '目标姿态 · 实机跟随' : '目标姿态 · 预览';
+    if (modelFollow.checked && angle !== undefined && feedbackFresh() && !latest[selected].enabled) {
+        status += ` · ${AXES[selected]} PWM 关闭`;
+    }
+    $('model-status').textContent = status;
+    $('tcp').textContent = pose.tcp.map((value, index) => `${'XYZ'[index]} ${value.toFixed(1)}`).join('　');
+    armView.setPose(pose, AXES[selected], modelSpan);
 }
 
 function drawTrace() {
@@ -184,6 +214,7 @@ async function updateDevice() {
             const ack = await current.request(job.type, MSG.ack, job.payload);
             if (link !== current) return;
             checkAck(ack, job.type);
+            job.complete?.(true);
             const message = `${job.label} · 板端已接收`;
             result(message);
             log(message);
@@ -201,7 +232,10 @@ async function updateDevice() {
         }
     } catch (error) {
         if (link !== current) return;
-        if (job) result(`${job.label} · ${error.message}`, 'error');
+        if (job) {
+            job.complete?.(false);
+            result(`${job.label} · ${error.message}`, 'error');
+        }
         if (job || !logFault) log(error.message, 'error');
         if (!job) logFault = true;
     } finally {
@@ -213,12 +247,28 @@ async function updateDevice() {
     }
 }
 
-function enqueue(type, payload, label) {
-    if (phase !== 'ready' || operation === 'command' || queued) return;
-    queued = { type, payload, label };
+function enqueue(type, payload, label, complete) {
+    if (phase !== 'ready' || operation === 'command' || queued) return false;
+    queued = { type, payload, label, complete };
     result(`${label} · 等待应答`);
     updateControls();
     void updateDevice();
+    return true;
+}
+
+function finishTargets(targets, accepted) {
+    modelDraft = null;
+    if (accepted) for (const [axis, degrees] of targets) modelTargets[axis] = degrees;
+    renderModel();
+}
+
+function sendTargets(targets, label) {
+    return enqueue(CMD.targets, targetsPayload(targets), label, accepted => finishTargets(targets, accepted));
+}
+
+function setModelTargets(targets, label) {
+    if (!modelFollow.checked) finishTargets(targets, true);
+    else if (!feedbackFresh() || !sendTargets(targets, label)) finishTargets(targets, false);
 }
 
 async function disconnect(message, failed = false) {
@@ -226,6 +276,8 @@ async function disconnect(message, failed = false) {
     link = null;
     queued = null;
     operation = null;
+    modelFollow.checked = false;
+    modelDraft = null;
     setPhase('closing', '正在关闭');
     await current?.close();
     setPhase(failed ? 'error' : 'idle', failed ? '连接中断' : '未连接');
@@ -236,12 +288,12 @@ async function disconnect(message, failed = false) {
 
 $('connect').addEventListener('click', async () => {
     if (phase === 'ready') {
-        await disconnect('USB 已断开');
+        await disconnect('串口已断开');
         return;
     }
     setPhase('opening', '选择串口');
     try {
-        const port = await navigator.serial.requestPort({ filters: [{ usbVendorId: 0x0483, usbProductId: 0x5740 }] });
+        const port = await navigator.serial.requestPort();
         setPhase('opening', '协议握手');
         const session = new ArmSerial(error => {
             if (link === session && phase === 'ready') void disconnect(error.message, true);
@@ -252,7 +304,7 @@ $('connect').addEventListener('click', async () => {
         history = [];
         logFault = false;
         setPhase('ready', '已连接');
-        log('USB CDC V1 握手通过');
+        log(`USART1 V${VERSION} 握手通过`);
         result('可发送单轴指令');
         renderFeedback();
         void updateDevice();
@@ -267,7 +319,7 @@ angleInput.addEventListener('input', () => { edits[selected] = angleInput.value;
 $('target-form').addEventListener('submit', event => {
     event.preventDefault();
     const degrees = angleInput.valueAsNumber;
-    try { enqueue(CMD.targets, targetPayload(selected, degrees), `${AXES[selected]} 目标 ${formatAngle(degrees)}°`); }
+    try { sendTargets([[selected, degrees]], `${AXES[selected]} 目标 ${formatAngle(degrees)}°`); }
     catch (error) { result(error.message, 'error'); }
 });
 for (const [id, enabled] of [['enable', 1], ['disable', 0]]) {
@@ -278,12 +330,53 @@ $('clear-log').addEventListener('click', () => $('log').replaceChildren());
 $('trace-mode').addEventListener('change', drawTrace);
 new ResizeObserver(drawTrace).observe($('trace'));
 
+modelFollow.addEventListener('change', () => {
+    modelDraft = null;
+    if (modelFollow.checked) {
+        modelFollow.checked = feedbackFresh();
+        if (modelFollow.checked) latest.forEach((axis, i) => { modelTargets[i] = axis.targetDeg; });
+    }
+    updateControls();
+    renderModel();
+});
+
+modelAngle.addEventListener('input', () => {
+    modelDraft = SERVO_CENTER + modelAngle.valueAsNumber * modelDirections[selected];
+    renderModel();
+});
+
+modelAngle.addEventListener('change', () => {
+    if (modelDraft === null) return;
+    setModelTargets([[selected, modelDraft]], `${AXES[selected]} 目标 ${formatAngle(modelDraft)}°`);
+});
+
+modelAngle.addEventListener('pointercancel', () => {
+    modelDraft = null;
+    renderModel();
+});
+
+reverseButton.addEventListener('click', () => {
+    modelDirections[selected] *= -1;
+    modelDraft = null;
+    renderModel();
+});
+
+$('model-home').addEventListener('click', () => {
+    const centers = model.joints.map(joint => [AXES.indexOf(joint.port), SERVO_CENTER]);
+    setModelTargets(centers, '整臂回中');
+});
+
 function loadModel(data) {
     const measured = readModel(data);
     if (!measured) return;
     model = measured;
+    modelFollow.checked = false;
+    modelDraft = null;
+    modelTargets.fill(SERVO_CENTER);
+    modelDirections.fill(1);
     modelSpan = Math.max(...[...model.joints.map(joint => joint.point), model.tcp].map(point => Math.hypot(...point)), 1);
     $('model-empty').hidden = true;
+    $('pose-control').hidden = false;
     renderFeedback();
 }
 

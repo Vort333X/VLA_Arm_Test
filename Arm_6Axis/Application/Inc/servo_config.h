@@ -10,22 +10,18 @@
 #define SERVO_INITIAL_TARGET_DEG     135.0f
 #define SERVO_CONTROL_PERIOD_MS      20U
 
-/* 以下为占位标定值，需实测每路在 0 度和 270 度时的 ADC 值
- * 若 ADC 电压随角度增大而降低，可将两个端点设为递减值 */
-#define SERVO_H3_ADC_AT_MIN          0U
-#define SERVO_H3_ADC_AT_MAX          4095U
-#define SERVO_H5_ADC_AT_MIN          0U
-#define SERVO_H5_ADC_AT_MAX          4095U
-#define SERVO_H4_ADC_AT_MIN          0U
-#define SERVO_H4_ADC_AT_MAX          4095U
-#define SERVO_H6_ADC_AT_MIN          0U
-#define SERVO_H6_ADC_AT_MAX          4095U
-#define SERVO_H8_ADC_AT_MIN          0U
-#define SERVO_H8_ADC_AT_MAX          4095U
-#define SERVO_H7_ADC_AT_MIN          0U
-#define SERVO_H7_ADC_AT_MAX          4095U
-#define SERVO_H10_ADC_AT_MIN         0U
-#define SERVO_H10_ADC_AT_MAX         4095U
+/* 依次填写角度 A、ADC A、角度 B、ADC B，两点的 ADC 不能相同 */
+#define SERVO_ADC_CALIBRATION(deg_a, raw_a, deg_b, raw_b) \
+    { .angle_a_deg = (deg_a), .angle_b_deg = (deg_b), .adc_a = (raw_a), .adc_b = (raw_b) }
+
+/* 先用占位值，装配后在安全行程内选两点实测，H10 暂按 ADC 随角度增大而降低 */
+#define SERVO_H3_ADC_CALIBRATION     SERVO_ADC_CALIBRATION(0.0f, 0U,    270.0f, 4095U)
+#define SERVO_H7_ADC_CALIBRATION     SERVO_ADC_CALIBRATION(0.0f, 0U,    270.0f, 4095U)
+#define SERVO_H5_ADC_CALIBRATION     SERVO_ADC_CALIBRATION(0.0f, 0U,    270.0f, 4095U)
+#define SERVO_H10_ADC_CALIBRATION    SERVO_ADC_CALIBRATION(0.0f, 4095U, 270.0f, 0U)
+#define SERVO_H8_ADC_CALIBRATION     SERVO_ADC_CALIBRATION(0.0f, 0U,    270.0f, 4095U)
+#define SERVO_H6_ADC_CALIBRATION     SERVO_ADC_CALIBRATION(0.0f, 0U,    270.0f, 4095U)
+#define SERVO_H4_ADC_CALIBRATION     SERVO_ADC_CALIBRATION(0.0f, 0U,    270.0f, 4095U)
 
 #define SERVO_DEADBAND_DEG           1.0f
 #define SERVO_FEEDBACK_FILTER_ALPHA  0.25f

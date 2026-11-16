@@ -5,11 +5,17 @@
 #include "servo_config.h"
 
 typedef struct {
+    float angle_a_deg;
+    float angle_b_deg;
+    uint16_t adc_a;
+    uint16_t adc_b;
+} ServoFeedbackCal_t;
+
+typedef struct {
     TIM_HandleTypeDef *timer;
     uint32_t pwm_channel;
     uint32_t adc_channel;
-    uint16_t adc_at_min;
-    uint16_t adc_at_max;
+    ServoFeedbackCal_t feedback_cal;
 
     uint16_t feedback_adc;
     float feedback_deg;

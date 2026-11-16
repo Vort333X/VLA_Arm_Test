@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="dark">
-    <title>机械臂 USB 调试台</title>
+    <title>机械臂串口调试台</title>
     <link rel="stylesheet" href="styles.css">
     <script type="module" src="app.mjs"></script>
 </head>
@@ -13,11 +13,11 @@
         <div class="shell bar-inner">
             <div class="identity">
                 <span class="product">VLA / ARM</span>
-                <h1>机械臂 USB 调试台</h1>
+                <h1>机械臂串口调试台</h1>
             </div>
             <div class="connect">
                 <span id="link-state" class="badge" role="status">未连接</span>
-                <button id="connect" class="primary" type="button">连接 USB</button>
+                <button id="connect" class="primary" type="button">连接串口</button>
             </div>
         </div>
     </header>
@@ -30,7 +30,10 @@
                         <p class="eyebrow">底座坐标系 · mm</p>
                         <h2 id="view-title">整臂示意</h2>
                     </div>
-                    <label class="button file-button">导入模型<input id="model-file" type="file" accept=".json,application/json" aria-label="导入实测模型 JSON"></label>
+                    <div class="model-actions">
+                        <button id="model-home" type="button" disabled>回中</button>
+                        <label class="button file-button">导入模型<input id="model-file" type="file" accept=".json,application/json" aria-label="导入实测模型 JSON"></label>
+                    </div>
                 </div>
                 <div class="viewport">
                     <canvas id="arm-view" aria-label="机械臂关节与末端示意"></canvas>
@@ -40,6 +43,13 @@
                         <p>导入轴心、转轴方向和 TCP 坐标后，这里会显示整臂</p>
                     </div>
                 </div>
+                <div class="pose-control" id="pose-control" hidden>
+                    <label for="model-angle" id="model-axis">H3 偏角</label>
+                    <input id="model-angle" type="range" min="-135" max="135" step="1" value="0" disabled>
+                    <output id="model-angle-value" for="model-angle">0°</output>
+                    <button id="model-reverse" type="button" aria-pressed="false" disabled>轴反向</button>
+                    <label class="follow-toggle"><input id="model-follow" type="checkbox" disabled>实机跟随</label>
+                </div>
                 <footer class="view-footer">
                     <span id="model-status">模型未配置</span>
                     <output id="tcp">X —　Y —　Z —</output>
@@ -48,7 +58,7 @@
 
             <section class="panel control-panel" aria-labelledby="control-title">
                 <div class="panel-head">
-                    <div><p class="eyebrow">USB CDC · 协议 V1</p><h2 id="control-title">单轴调试</h2></div>
+                    <div><p id="protocol-label" class="eyebrow">USART1</p><h2 id="control-title">单轴调试</h2></div>
                 </div>
                 <div class="control-body">
                     <label for="joint">舵机通道</label>

@@ -1,4 +1,5 @@
-export const AXES = Object.freeze(['H3', 'H5', 'H4', 'H6', 'H8', 'H7']);
+export const AXES = Object.freeze(['H3', 'H7', 'H5', 'H10', 'H8', 'H6']);
+export const VERSION = 2;
 export const CMD = Object.freeze({ targets: 1, enable: 2, feedback: 3, ping: 4 });
 export const MSG = Object.freeze({ ack: 0x80, feedback: 0x81, pong: 0x84 });
 const MAX_PAYLOAD = 512;
@@ -20,7 +21,7 @@ export function encodeFrame(type, seq, payload = new Uint8Array()) {
     if (payload.length > MAX_PAYLOAD) throw new Error('载荷超过 512 字节');
     const bytes = new Uint8Array(FRAME_OVERHEAD + payload.length);
     const view = new DataView(bytes.buffer);
-    bytes.set([0xaa, 0x55, 1, type]);
+    bytes.set([0xaa, 0x55, VERSION, type]);
     view.setUint16(4, seq, true);
     view.setUint16(6, payload.length, true);
     bytes.set(payload, HEADER_SIZE);
@@ -48,7 +49,7 @@ export class FrameDecoder {
             if (bytes[offset + 1] !== 0x55) { offset++; continue; }
             if (bytes.length - offset < HEADER_SIZE) break;
             const length = view.getUint16(offset + 6, true);
-            if (bytes[offset + 2] !== 1 || length > MAX_PAYLOAD) { offset++; continue; }
+            if (bytes[offset + 2] !== VERSION || length > MAX_PAYLOAD) { offset++; continue; }
             const end = offset + HEADER_SIZE + length;
             if (end + 2 > bytes.length) break;
             if (view.getUint16(end, true) !== crc16(bytes.subarray(offset + 2, end))) {
@@ -65,11 +66,18 @@ export class FrameDecoder {
 }
 
 export function targetPayload(axis, degrees) {
-    if (!Number.isInteger(axis) || axis < 0 || axis >= AXES.length) throw new Error('无效的关节');
-    if (!Number.isFinite(degrees) || degrees < 0 || degrees > 270) throw new Error('角度须在 0～270° 内');
+    return targetsPayload([[axis, degrees]]);
+}
+
+export function targetsPayload(targets) {
     const payload = new Uint8Array(1 + 2 * AXES.length);
-    payload[0] = 1 << axis;
-    new DataView(payload.buffer).setUint16(1 + 2 * axis, Math.round(degrees * 100), true);
+    const view = new DataView(payload.buffer);
+    for (const [axis, degrees] of targets) {
+        if (!Number.isInteger(axis) || axis < 0 || axis >= AXES.length) throw new Error('无效的关节');
+        if (!Number.isFinite(degrees) || degrees < 0 || degrees > 270) throw new Error('角度须在 0～270° 内');
+        payload[0] |= 1 << axis;
+        view.setUint16(1 + 2 * axis, Math.round(degrees * 100), true);
+    }
     return payload;
 }
 

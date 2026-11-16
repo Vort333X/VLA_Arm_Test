@@ -1,13 +1,14 @@
 #include "uart_io.h"
+#include "arm_protocol.h"
 #include "ring_buffer.h"
 #include <string.h>
 
-#define UART_BUFFER_SIZE 256U
+#define UART_RX_BUFFER_SIZE 1024U
 
-static uint8_t rx_buffer[UART_BUFFER_SIZE];
+static uint8_t rx_buffer[UART_RX_BUFFER_SIZE];
 static RingBuffer_t rx_ring = {.data = rx_buffer, .capacity = sizeof(rx_buffer)};
 static uint8_t rx_byte;
-static uint8_t tx_buffer[UART_BUFFER_SIZE];
+static uint8_t tx_buffer[ARM_PROTOCOL_FRAME_SIZE];
 
 void UART_Init(void)
 {

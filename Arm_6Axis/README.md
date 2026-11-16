@@ -1,24 +1,24 @@
 # 六轴舵机机械臂底层
 
-STM32F103C8T6 裸机控制，六轴加一路备用，通过 USB CDC 二进制协议收发关节指令和反馈。
+STM32F103C8T6 裸机控制，六轴加一路备用，通过 USART1 二进制协议收发关节指令和反馈。
 
 ## 接口与轴序
 
 每个舵机插座：1 GND、2 舵机电源、3 PWM、4 ADC 反馈。
 
-| 实例 / 数组下标 | 插座 | PWM | MCU 引脚 | ADC1 通道 / 引脚 |
-|---|---|---|---|---|
-| ARM_SERVO_H3 / 0 | H3 | TIM1_CH1 | PA8 | IN0 / PA0 |
-| ARM_SERVO_H5 / 1 | H5 | TIM1_CH2 | PA9 | IN1 / PA1 |
-| ARM_SERVO_H4 / 2 | H4 | TIM1_CH3 | PA10 | IN2 / PA2 |
-| ARM_SERVO_H6 / 3 | H6 | TIM2_CH2 | PB3 | IN4 / PA4 |
-| ARM_SERVO_H8 / 4 | H8 | TIM2_CH3 | PB10 | IN5 / PA5 |
-| ARM_SERVO_H7 / 5 | H7 | TIM2_CH4 | PB11 | IN6 / PA6 |
-| ARM_SERVO_H10_SPARE / 6 | H10 | TIM2_CH1 | PA15 | IN3 / PA3 |
+| 机械轴 | SWD 实例 / 固件编号 | 插座 | PWM | MCU 引脚 | ADC1 通道 / 引脚 |
+|---|---|---|---|---|---|
+| J1 | `servo_h3` / 0 | H3 | TIM1_CH1 | PA8 | IN0 / PA0 |
+| J2 | `servo_h7` / 1 | H7 | TIM2_CH4 | PB11 | IN6 / PA6 |
+| J3 | `servo_h5` / 2 | H5 | TIM1_CH2 | PA9 | IN1 / PA1 |
+| J4 | `servo_h10` / 3 | H10 | TIM2_CH1 | PA15 | IN3 / PA3 |
+| J5 | `servo_h8` / 4 | H8 | TIM2_CH3 | PB10 | IN5 / PA5 |
+| J6 | `servo_h6` / 5 | H6 | TIM2_CH2 | PB3 | IN4 / PA4 |
+| 备用 | `servo_h4` / 6 | H4 | TIM1_CH3 | PA10 | IN2 / PA2 |
 
 H9：PB6 = USART1_TX，PB7 = USART1_RX，115200 / 8N1。USB：PA11 DM、PA12 DP。
 TIM2 全重映射、USART1 重映射；禁用 JTAG 释放 PA15/PB3，保留 SWD。
-上述轴序只是软件默认，可在 `arm.c` 的实例表里调整。
+轴序按实机从底座到末端排列，批量控制和串口协议共用这一顺序。
 
 ## IOC 与 PWM 分频
 
@@ -53,10 +53,10 @@ IOC 保持单通道规则转换；`ADC_Read()` 在每次读取前切换通道，
 | `Application/Inc/arm.h`、`Application/Src/arm.c` | 七路实例表、六轴批量操作 |
 | `Application/Src/adc_io.c`、`pwm_io.c` | ADC 校准/采样、PWM 写入/启停 |
 | `Application/Src/uart_io.c`、`usb_io.c` | UART/USB 收发 |
-| `Application/Inc/arm_protocol.h`、`Application/Src/arm_protocol.c` | USB 二进制帧定义、解析和应答 |
+| `Application/Inc/arm_protocol.h`、`Application/Src/arm_protocol.c` | USART1 二进制帧定义、解析和应答 |
 | `Core/Src/main.c` | 初始化和 20 ms 裸机调度 |
 
-`arm_servos[]` 可直接加入调试器观察窗口。主要字段：
+按 H 口将独立结构体加入 SWD 观察窗口，例如 `servo_h3`。主要字段如下。
 
 - `feedback_adc`：本次原始 ADC。
 - `feedback_deg`：换算并滤波后的反馈角度。
@@ -78,7 +78,7 @@ Arm_Init();
 标定后在上述初始化后添加，例如先调 H3：
 
 ```c
-Servo_t *joint = &arm_servos[ARM_SERVO_H3];
+Servo_t *joint = &servo_h3;
 Servo_SetClosedLoop(joint, 0U);       // 先直接输出 PWM，核对角度和反馈
 Servo_SetTarget(joint, 135.0f);
 Servo_Enable(joint, 1U);
@@ -90,9 +90,9 @@ Servo_Enable(joint, 1U);
 ```c
 const float target[ARM_AXIS_COUNT] = {135, 135, 135, 135, 135, 135};
 Arm_SetTargets(target);
-Arm_Enable(1U);                      // 仅启用前六路，H10 不受影响
+Arm_Enable(1U);                      // 启用六个工作轴
 // Arm_Enable(0U);                   // 关闭六轴 PWM
-// Servo_Enable(&arm_servos[ARM_SERVO_H10_SPARE], 1U); // 单独启用备用路
+// Servo_Enable(&servo_h4, 1U);       // 单独启用备用路
 ```
 
 `Arm_Update()` 已由主循环每 20 ms 调用，反馈和控制均在主循环执行。
@@ -103,30 +103,32 @@ Arm_Enable(1U);                      // 仅启用前六路，H10 不受影响
 在 `servo_config.h` 修改：
 
 1. `SERVO_PWM_MIN_US/MAX_US`：按实际舵机规格和实测修正。
-2. 各路 `SERVO_Hx_ADC_AT_MIN/MAX`：角度两端对应的实测 ADC 值。两端不能相等；反向反馈可填递减端点。
+2. 各路 `SERVO_Hx_ADC_CALIBRATION`：依次填写 `SERVO_ADC_CALIBRATION(角度A, ADC_A, 角度B, ADC_B)`。角度增大时 ADC 减小，照实填写，换算会自动采用负斜率。
 3. `SERVO_ANGLE_MIN_DEG/MAX_DEG`：有效角度边界。
 4. `SERVO_DEADBAND_DEG`：误差死区，初始 1°。
 5. `SERVO_FEEDBACK_FILTER_ALPHA`：一阶滤波系数，初始 0.25。
 6. `SERVO_CORRECTION_GAIN`、`SERVO_CORRECTION_LIMIT_DEG`：每周期修正增益 0.1、最大偏移 ±15°。
 
-换算：`angle = min_angle + (adc - adc_at_min) / (adc_at_max - adc_at_min) * angle_span`。
+每次只调一轴，在装配后的安全行程内选两个相隔较远的角度。等舵机停稳后，记下两点的角度和 ADC 原始值，两点的 ADC 必须不同。初调可用网页目标角来对齐命令和反馈。需要实际机械角时，用量角器实测关节相对中位的有符号偏角，叠加 `135°` 后填写。标完再用两点之间的第三个位置复核。
+
+换算：`angle = angle_a + (adc - adc_a) / (adc_b - adc_a) * (angle_b - angle_a)`。
 外环在死区外执行 `command += gain * (target - feedback)`，并限制在目标 ±修正上限及有效角度范围内；
 死区内保持原 PWM。它是围绕舵机内置位置环的慢速增量修正，不是完整 PID。
 重复设置相同目标不会清空修正量；失效的 ADC 采样会跳过该路本周期控制。
 `SERVO_CLOSED_LOOP_DEFAULT` 决定实例初始化时的外环开关；PWM 仍需显式使能。
 
-ADC 端点初始 0/4095 只是占位，必须结合实际反馈标定。
+ADC 初值 0/4095 用于占位，按实测标定后再试外环。
 F103 ADC 引脚输入应在 0～VDDA（板上通常为 3.3 V）范围；若舵机反馈超过此范围，需要硬件分压。
 软件宏只负责换算，不能代替分压。舵机供电地和 MCU 地应共地。
 
-## USB CDC 协议 v1
+## USART1 协议 v2
 
-USB 按字节流收发，解析器按帧头和载荷长度组帧。一帧可以跨多个 USB 包，单次读取也可能包含多个帧。
+USART1 使用 115200 / 8N1，无流控，按字节流收发。解析器按帧头和载荷长度组帧，单次读取可能包含半帧或多帧。板载 USB CDC 保留为独立接口。
 
 | 偏移 | 字节数 | 字段 |
 |---|---:|---|
 | 0 | 2 | 同步字 `AA 55` |
-| 2 | 1 | 版本 `01` |
+| 2 | 1 | 版本 `02` |
 | 3 | 1 | 消息类型 |
 | 4 | 2 | `seq` 请求序号，应答原样返回 |
 | 6 | 2 | `len` 载荷字节数，允许 `0～512` |
@@ -135,7 +137,9 @@ USB 按字节流收发，解析器按帧头和载荷长度组帧。一帧可以�
 
 所有多字节整数按小端序编码，最大整帧 522 字节。CRC 多项式 `0x1021`，初值 `0xFFFF`，输入输出不反射，结果异或 `0x0000`。校验字符串 `123456789` 的结果是 `0x29B1`，在线上写作 `B1 29`。
 
-轴序为 `H3、H5、H4、H6、H8、H7`，轴掩码 `mask` 的低 6 位按此顺序对应六轴。H10 保留备用。角度字段为无符号 16 位整数，每单位 `0.01°`，例如 `140°` 编码为十进制 `14000`。
+从底座到末端的轴序为 `H3、H7、H5、H10、H8、H6`，轴掩码 `mask` 的低 6 位按此顺序对应六轴，H4 为备用路。角度字段为无符号 16 位整数，每单位 `0.01°`，例如 `140°` 编码为十进制 `14000`。
+
+V2 沿用 V1 的帧结构，为新轴序分配独立的协议版本。网页和 VLA 客户端需使用 V2 轴序与版本字节。
 
 | 请求类型 | 载荷 | 应答 |
 |---|---|---|
@@ -148,13 +152,13 @@ USB 按字节流收发，解析器按帧头和载荷长度组帧。一帧可以�
 
 `FEEDBACK` 共 38 字节，前两个字节为使能掩码、已采样掩码，随后按轴序重复 `目标角度:u16 + 反馈角度:u16 + ADC 原始值:u16`。已采样位表示曾获得有效 ADC 样本。反馈角度精度取决于各轴实测标定。
 
-上电后 PWM 默认关闭。上位机可以先发送目标，再显式使能选中的轴。当前帧直接设置舵机目标，装配后的各轴有效行程和过渡轨迹由测试上位机选定。USB 断开后，固件保持最后的目标与 PWM 使能状态。
+上电后 PWM 默认关闭。上位机可以先发送目标，再显式使能选中的轴。当前帧直接设置舵机目标，装配后的各轴有效行程和过渡轨迹由测试上位机选定。串口断开后，固件保持最后的目标与 PWM 使能状态。
 
-主循环每轮最多解析 128 字节，应答遇到 USB 忙就留待下一轮，不等待收满或发送完成。半帧超过 100 ms 无后续解析数据会丢弃，校验失败或不支持的协议版本静默丢弃。USB RX 缓冲 1024 字节，可用 1023 字节，满时丢弃新数据。USART1 仍提供独立的原始字节收发，每个方向的缓冲区为 256 字节。
+主循环每轮最多解析 128 字节，串口发送忙时下一轮继续尝试。收发均通过中断，半帧超过 100 ms 无后续数据会丢弃，校验失败或不支持的协议版本静默丢弃。USART1 的 RX 缓冲为 1024 字节，可用 1023 字节，TX 缓冲可一次容纳最大 522 字节整帧。
 
 ## 网页与 VLA 上位机接入
 
-网页使用桌面 Chrome 的 Web Serial，用户点击连接并选择 STM32 的 COM 口。网页用 `Uint8Array` 和 `DataView` 生成上述二进制帧，读取时将字节持续送入组帧器，再按 `seq` 匹配应答。第一版使用一问一答，同时只保留一个待应答请求，建议收到应答后再发送下一帧，等待超时可从 300 ms 起调。
+网页使用桌面 Chrome 的 Web Serial，点击连接后选择接到 H9 的 USB 转串口模块对应的 COM 口。网页用 `Uint8Array` 和 `DataView` 生成上述二进制帧，读取时将字节持续送入组帧器，再按 `seq` 匹配应答。第一版使用一问一答，同时只保留一个待应答请求，建议收到应答后再发送下一帧，等待超时可从 300 ms 起调。
 
 页面首次连接先发送 `PING` 校验通信，再用 `READ_FEEDBACK` 更新关节状态。单轴调试时通过轴掩码选择关节。末端打点或 VLA 输出在上位机进行逆解和轨迹处理，逐帧发送同一格式的关节目标。VLA 进程可通过普通 COM 口客户端接入，与网页使用同一份协议。一个 COM 口同一时间由一个客户端打开。
 

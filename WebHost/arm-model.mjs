@@ -51,7 +51,11 @@ export function forward(model, degrees) {
         const point = transform(joint.point, i);
         return { ...joint, point, axis: sub(transform(add(joint.point, joint.axis), i), point) };
     });
-    return { joints, tcp: transform(model.tcp, joints.length) };
+    // 在尖端画一根垂直于末轴的小线，便于观察 roll
+    const lastAxis = model.joints.at(-1).axis;
+    const across = cross(lastAxis, Math.abs(lastAxis[1]) < 0.9 ? [0, 1, 0] : [0, 0, 1]);
+    const mark = add(model.tcp, scale(across, 16 / Math.hypot(...across)));
+    return { joints, tcp: transform(model.tcp, joints.length), tipMark: transform(mark, joints.length) };
 }
 
 export function feedbackAngles(model, axes) {
@@ -174,6 +178,7 @@ export class ArmView {
             ctx.font = '12px monospace';
             ctx.fillText(joint.name, node.x + 11, node.y - 8);
         });
+        line(tcp, project(this.pose.tipMark), '#f5cd81', 2);
         ctx.fillStyle = '#f5cd81';
         ctx.fillRect(tcp.x - 4, tcp.y - 4, 8, 8);
         ctx.fillText('TCP', tcp.x + 9, tcp.y - 8);

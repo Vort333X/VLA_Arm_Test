@@ -1,4 +1,4 @@
-import { CMD, FrameDecoder, MSG, encodeFrame } from './protocol.mjs';
+import { CMD, FrameDecoder, MSG, VERSION, encodeFrame } from './protocol.mjs';
 
 const TIMEOUT_MS = 300;
 
@@ -16,14 +16,14 @@ export class ArmSerial {
     constructor(onLinkLost) { this.onLinkLost = onLinkLost; }
 
     async open(port) {
-        await port.open({ baudRate: 115200, bufferSize: 4096 });
+        await port.open({ baudRate: 115200, dataBits: 8, stopBits: 1, parity: 'none', flowControl: 'none', bufferSize: 4096 });
         this.#port = port;
         this.#closed = false;
         try {
             this.#reader = port.readable.getReader();
             this.#writer = port.writable.getWriter();
             this.#reading = this.#read();
-            const probe = new Uint8Array([0x56, 0x4c, 0x41, 1]);
+            const probe = new Uint8Array([0x56, 0x4c, 0x41, VERSION]);
             const answer = await this.request(CMD.ping, MSG.pong, probe);
             if (answer.length !== probe.length || !answer.every((byte, i) => byte === probe[i])) {
                 throw new Error('握手回显不一致');
@@ -84,7 +84,7 @@ export class ArmSerial {
             this.#reader.releaseLock();
             this.#reader = null;
             if (!this.#closed) {
-                const error = ended ?? new Error('USB 串口已断开');
+                const error = ended ?? new Error('串口已断开');
                 this.#finish(error);
                 this.onLinkLost(error);
             }

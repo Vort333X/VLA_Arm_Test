@@ -11,11 +11,10 @@ static float Clamp(float value, float minimum, float maximum)
 
 float Servo_AdcToAngle(const Servo_t *servo, uint16_t adc)
 {
-    float ratio = ((float)adc - servo->adc_at_min) /
-                  ((float)servo->adc_at_max - servo->adc_at_min);
-    return Clamp(SERVO_ANGLE_MIN_DEG + ratio *
-                 (SERVO_ANGLE_MAX_DEG - SERVO_ANGLE_MIN_DEG),
-                 SERVO_ANGLE_MIN_DEG, SERVO_ANGLE_MAX_DEG);
+    const ServoFeedbackCal_t *cal = &servo->feedback_cal;
+    float ratio = ((float)adc - cal->adc_a) / ((float)cal->adc_b - cal->adc_a);
+    float degrees = cal->angle_a_deg + ratio * (cal->angle_b_deg - cal->angle_a_deg);
+    return Clamp(degrees, SERVO_ANGLE_MIN_DEG, SERVO_ANGLE_MAX_DEG);
 }
 
 uint16_t Servo_AngleToTicks(float degrees)

@@ -1,6 +1,6 @@
 #include "arm_protocol.h"
 #include "arm.h"
-#include "usb_io.h"
+#include "uart_io.h"
 #include <string.h>
 
 #define RX_BUDGET_BYTES      128U
@@ -13,7 +13,6 @@ static uint16_t rx_size;
 static uint16_t rx_expected;
 static uint16_t tx_size;
 static uint32_t last_rx_ms;
-static uint32_t usb_session;
 
 static uint16_t ReadU16(const uint8_t *bytes)
 {
@@ -69,7 +68,7 @@ static ArmProtocolStatus_t SetTargets(const uint8_t *payload, uint16_t length)
         }
     }
     for (uint8_t i = 0U; i < ARM_AXIS_COUNT; ++i) {
-        if (mask & (1U << i)) Servo_SetTarget(&arm_servos[i], degrees[i]);
+        if (mask & (1U << i)) Servo_SetTarget(Arm_GetServo(i), degrees[i]);
     }
     return ARM_ACK_OK;
 }
@@ -82,7 +81,7 @@ static ArmProtocolStatus_t SetEnable(const uint8_t *payload, uint16_t length)
     if (mask == 0U || (mask & ~ARM_AXIS_MASK) || enable > 1U) return ARM_ACK_BAD_VALUE;
 
     for (uint8_t i = 0U; i < ARM_AXIS_COUNT; ++i) {
-        Servo_t *servo = &arm_servos[i];
+        Servo_t *servo = Arm_GetServo(i);
         if ((mask & (1U << i)) && servo->enabled != enable) Servo_Enable(servo, enable);
     }
     return ARM_ACK_OK;
@@ -94,7 +93,7 @@ static void QueueFeedback(uint16_t seq)
     payload[0] = 0U;
     payload[1] = 0U;
     for (uint8_t i = 0U; i < ARM_AXIS_COUNT; ++i) {
-        const Servo_t *servo = &arm_servos[i];
+        const Servo_t *servo = Arm_GetServo(i);
         if (servo->enabled) payload[0] |= (uint8_t)(1U << i);
         if (servo->feedback_ready) payload[1] |= (uint8_t)(1U << i);
 
@@ -180,21 +179,15 @@ static void ParseByte(uint8_t byte)
 
 void Arm_ProtocolPoll(uint32_t now_ms)
 {
-    uint32_t session = USB_Session();
-    if (session != usb_session) {
-        usb_session = session;
-        rx_size = 0U;
-        tx_size = 0U;
-    }
     if (tx_size != 0U) {
-        if (USB_Send(tx_frame, tx_size) == USBD_BUSY) return;
+        if (UART_Send(tx_frame, tx_size) == HAL_BUSY) return;
         tx_size = 0U;
     }
     if ((uint32_t)(now_ms - last_rx_ms) >= RX_IDLE_TIMEOUT_MS) rx_size = 0U;
 
     for (uint16_t i = 0U; i < RX_BUDGET_BYTES && tx_size == 0U; ++i) {
         uint8_t byte;
-        if (USB_Read(&byte, 1U) == 0U || USB_Session() != session) break;
+        if (UART_Read(&byte, 1U) == 0U) break;
         ParseByte(byte);
         last_rx_ms = now_ms;
     }
