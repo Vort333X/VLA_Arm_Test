@@ -1,4 +1,4 @@
-import { CMD, FrameDecoder, MSG, VERSION, encodeFrame } from './protocol.mjs';
+import { CMD, FrameDecoder, MSG, VERSION, encodeFrame } from './protocol.mjs?v=axes-1';
 
 const TIMEOUT_MS = 300;
 

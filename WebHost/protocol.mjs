@@ -1,4 +1,4 @@
-export const AXES = Object.freeze(['H3', 'H7', 'H5', 'H10', 'H8', 'H6']);
+export const AXES = Object.freeze(['J1', 'J2', 'J3', 'J4', 'J5', 'J6']);
 export const VERSION = 2;
 export const CMD = Object.freeze({ targets: 1, enable: 2, feedback: 3, ping: 4 });
 export const MSG = Object.freeze({ ack: 0x80, feedback: 0x81, pong: 0x84 });

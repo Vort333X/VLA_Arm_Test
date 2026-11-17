@@ -140,7 +140,11 @@ int main(void)
       Arm_Update();
     }
 
+    //复位回中测试
+    // Arm_ResetToCenter();
+
     Arm_ProtocolPoll(now);
+    HAL_Delay(1);
   }
   /* USER CODE END 3 */
 }

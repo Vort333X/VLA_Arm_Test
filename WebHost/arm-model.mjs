@@ -1,4 +1,8 @@
-import { AXES } from './protocol.mjs';
+import { AXES } from './protocol.mjs?v=axes-1';
+
+const legacyPorts = new Map([
+    ['H3', 'J1'], ['H7', 'J2'], ['H5', 'J3'], ['H10', 'J4'], ['H8', 'J5'], ['H6', 'J6'],
+]);
 
 const vector = value => Array.isArray(value) && value.length === 3 && value.every(Number.isFinite);
 const add = (a, b) => a.map((value, i) => value + b[i]);
@@ -14,9 +18,10 @@ export function readModel(data) {
     }
     const ports = new Set();
     const joints = data.joints.map((joint, i) => {
-        const name = `J${i + 1}`;
-        const { port, point, axis, adc } = joint;
-        if (!AXES.includes(port) || ports.has(port)) throw new Error(`${name} 的 H 口无效或重复`);
+        const { point, axis, adc } = joint;
+        const port = legacyPorts.get(joint.port) ?? joint.port;
+        if (!AXES.includes(port) || ports.has(port)) throw new Error(`第 ${i + 1} 项的轴号无效或重复`);
+        const name = port;
         ports.add(port);
         if (!vector(point) || !vector(axis)) throw new Error(`${name} 的轴心和轴方向应为三个数`);
         const length = Math.hypot(...axis);

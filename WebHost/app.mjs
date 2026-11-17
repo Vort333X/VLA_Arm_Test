@@ -1,17 +1,17 @@
-import { AXES, CMD, MSG, VERSION, checkAck, decodeFeedback, targetsPayload } from './protocol.mjs';
-import { ArmSerial } from './serial.mjs';
-import { ArmView, forward, readModel } from './arm-model.mjs?v=space-2';
-import { createPlanarIk, PITCH_PORTS } from './planar-ik.mjs?v=space-2';
-import { PlanarView, TopView } from './planar-view.mjs?v=space-2';
+import { AXES, CMD, MSG, VERSION, checkAck, decodeFeedback, targetsPayload } from './protocol.mjs?v=axes-1';
+import { ArmSerial } from './serial.mjs?v=axes-1';
+import { ArmView, forward, readModel } from './arm-model.mjs?v=axes-1';
+import { createPlanarIk, PITCH_JOINTS } from './planar-ik.mjs?v=axes-1';
+import { PlanarView, TopView } from './planar-view.mjs?v=axes-1';
 
 const POLL_MS = 200;
 const STALE_MS = 1000;
 const HISTORY_MS = 30_000;
 const SERVO_CENTER = 135;
 const ALL_PWM_CHANNELS = (1 << AXES.length) - 1;
-const PITCH_AXES = PITCH_PORTS.map(port => AXES.indexOf(port));
-const YAW_AXIS = AXES.indexOf('H3');
-const ROLL_AXIS = AXES.indexOf('H8');
+const PITCH_AXES = PITCH_JOINTS.map(port => AXES.indexOf(port));
+const YAW_AXIS = AXES.indexOf('J1');
+const ROLL_AXIS = AXES.indexOf('J5');
 const $ = id => document.getElementById(id);
 $('protocol-label').textContent = `USART1 · 协议 V${VERSION}`;
 const axisTable = $('axis-table');
@@ -208,7 +208,7 @@ function renderPlanar(busy) {
     const yaw = selection?.yaw;
     const r = selection?.point ? selection.point[0] + planarIk.shoulderR : null;
     const yawText = yaw === null ? '保持' : (yaw === undefined ? '—' : `${yaw.toFixed(1)}°`);
-    $('planar-point').textContent = `H3 ${yawText}　R ${r === null ? '—' : `${r.toFixed(1)} mm`}`;
+    $('planar-point').textContent = `J1 ${yawText}　R ${r === null ? '—' : `${r.toFixed(1)} mm`}`;
 
     let issue;
     let pathBlocked = false;

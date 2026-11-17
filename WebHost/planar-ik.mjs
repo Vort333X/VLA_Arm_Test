@@ -1,6 +1,6 @@
 import { createPlanarCollision } from './planar-collision.mjs';
 
-export const PITCH_PORTS = ['H7', 'H5', 'H10'];
+export const PITCH_JOINTS = ['J2', 'J3', 'J4'];
 
 const DEG = Math.PI / 180;
 const UP = [0, 0, 1];
@@ -11,7 +11,7 @@ const nearZero = v => Math.hypot(...v) < 0.05;
 const wrap = angle => Math.atan2(Math.sin(angle), Math.cos(angle));
 
 export function createPlanarIk(model, limitDeg) {
-    const ports = ['H3', ...PITCH_PORTS, 'H8'];
+    const ports = ['J1', ...PITCH_JOINTS, 'J5'];
     if (model.joints.length !== ports.length || model.joints.some((joint, i) => joint.port !== ports[i])) return null;
 
     const [yaw, shoulder, elbow, wrist, roll] = model.joints;

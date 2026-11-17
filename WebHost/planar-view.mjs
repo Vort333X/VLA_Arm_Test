@@ -158,7 +158,7 @@ export class TopView {
         ctx.fillStyle = '#9eafb8';
         ctx.fillText('X', cx + extent * scale + 5, cy - 4);
         ctx.fillText('Y', cx + 5, cy - extent * scale - 5);
-        ctx.fillText('H3', cx + 5, cy + 13);
+        ctx.fillText('J1', cx + 5, cy + 13);
         if (!target) return;
         const x = target[0] - base[0], y = target[1] - base[1];
         if (Math.abs(x) > extent || Math.abs(y) > extent) return;

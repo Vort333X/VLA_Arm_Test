@@ -43,7 +43,7 @@
                     </div>
                 </div>
                 <div class="pose-control" id="pose-control" hidden>
-                    <label for="model-angle" id="model-axis">H3 偏角</label>
+                    <label for="model-angle" id="model-axis">J1 偏角</label>
                     <input id="model-angle" type="range" min="-135" max="135" step="1" value="0" disabled>
                     <output id="model-angle-value" for="model-angle">0°</output>
                     <button id="model-reverse" type="button" title="整臂和平面选点共用的舵机方向校准" aria-pressed="false" disabled>轴反向</button>
@@ -115,7 +115,7 @@
             </div>
             <footer class="view-footer">
                 <span id="planar-status" role="status">点图预览</span>
-                <output id="planar-point">H3 —　R —</output>
+                <output id="planar-point">J1 —　R —</output>
             </footer>
         </section>
 
@@ -142,7 +142,7 @@
         <div class="workspace lower">
             <section class="panel trace-panel" aria-labelledby="trace-title">
                 <div class="panel-head">
-                    <div><h2 id="trace-title">H3 响应曲线</h2><p id="trace-legend" class="hint">目标 / 板端反馈 · 最近 30 秒</p></div>
+                    <div><h2 id="trace-title">J1 响应曲线</h2><p id="trace-legend" class="hint">目标 / 板端反馈 · 最近 30 秒</p></div>
                     <select id="trace-mode" aria-label="曲线数据"><option value="angle">角度</option><option value="adc">ADC</option></select>
                 </div>
                 <div class="trace-region"><canvas id="trace" aria-label="所选通道反馈曲线"></canvas><p id="trace-empty" class="hint">有反馈数据后显示曲线</p></div>
@@ -167,7 +167,7 @@
         if (location.protocol === 'file:') {
             startupError('请通过本地服务打开 http://127.0.0.1:8765/');
         } else {
-            import('./app.mjs?v=space-3').catch(error => {
+            import('./app.mjs?v=axes-1').catch(error => {
                 console.error(error);
                 startupError(`网页脚本加载失败 · ${error.message}`);
             });

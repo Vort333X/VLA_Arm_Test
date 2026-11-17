@@ -2,51 +2,51 @@
 #include "adc.h"
 
 /* 独立的全局结构体便于通过 SWD 观察每路舵机 */
-Servo_t servo_h3 = {
+Servo_t servo_j1 = {
     .timer = &htim1, .pwm_channel = TIM_CHANNEL_1, .adc_channel = ADC_CHANNEL_0,
-    .feedback_cal = SERVO_H3_ADC_CALIBRATION,
-    .output_limits = SERVO_H3_OUTPUT_LIMITS,
+    .feedback_cal = SERVO_J1_ADC_CALIBRATION,
+    .output_limits = SERVO_J1_OUTPUT_LIMITS,
 };
-Servo_t servo_h5 = {
-    .timer = &htim1, .pwm_channel = TIM_CHANNEL_2, .adc_channel = ADC_CHANNEL_1,
-    .feedback_cal = SERVO_H5_ADC_CALIBRATION,
-    .output_limits = SERVO_H5_OUTPUT_LIMITS,
-};
-Servo_t servo_h4 = {
-    .timer = &htim1, .pwm_channel = TIM_CHANNEL_3, .adc_channel = ADC_CHANNEL_2,
-    .feedback_cal = SERVO_H4_ADC_CALIBRATION,
-    .output_limits = SERVO_H4_OUTPUT_LIMITS,
-};
-Servo_t servo_h6 = {
-    .timer = &htim2, .pwm_channel = TIM_CHANNEL_2, .adc_channel = ADC_CHANNEL_4,
-    .feedback_cal = SERVO_H6_ADC_CALIBRATION,
-    .output_limits = SERVO_H6_OUTPUT_LIMITS,
-};
-Servo_t servo_h8 = {
-    .timer = &htim2, .pwm_channel = TIM_CHANNEL_3, .adc_channel = ADC_CHANNEL_5,
-    .feedback_cal = SERVO_H8_ADC_CALIBRATION,
-    .output_limits = SERVO_H8_OUTPUT_LIMITS,
-};
-Servo_t servo_h7 = {
+Servo_t servo_j2 = {
     .timer = &htim2, .pwm_channel = TIM_CHANNEL_4, .adc_channel = ADC_CHANNEL_6,
-    .feedback_cal = SERVO_H7_ADC_CALIBRATION,
-    .output_limits = SERVO_H7_OUTPUT_LIMITS,
+    .feedback_cal = SERVO_J2_ADC_CALIBRATION,
+    .output_limits = SERVO_J2_OUTPUT_LIMITS,
 };
-Servo_t servo_h10 = {
+Servo_t servo_j3 = {
+    .timer = &htim1, .pwm_channel = TIM_CHANNEL_2, .adc_channel = ADC_CHANNEL_1,
+    .feedback_cal = SERVO_J3_ADC_CALIBRATION,
+    .output_limits = SERVO_J3_OUTPUT_LIMITS,
+};
+Servo_t servo_j4 = {
     .timer = &htim2, .pwm_channel = TIM_CHANNEL_1, .adc_channel = ADC_CHANNEL_3,
-    .feedback_cal = SERVO_H10_ADC_CALIBRATION,
-    .output_limits = SERVO_H10_OUTPUT_LIMITS,
+    .feedback_cal = SERVO_J4_ADC_CALIBRATION,
+    .output_limits = SERVO_J4_OUTPUT_LIMITS,
+};
+Servo_t servo_j5 = {
+    .timer = &htim2, .pwm_channel = TIM_CHANNEL_3, .adc_channel = ADC_CHANNEL_5,
+    .feedback_cal = SERVO_J5_ADC_CALIBRATION,
+    .output_limits = SERVO_J5_OUTPUT_LIMITS,
+};
+Servo_t servo_j6 = {
+    .timer = &htim2, .pwm_channel = TIM_CHANNEL_2, .adc_channel = ADC_CHANNEL_4,
+    .feedback_cal = SERVO_J6_ADC_CALIBRATION,
+    .output_limits = SERVO_J6_OUTPUT_LIMITS,
+};
+Servo_t servo_j7 = {
+    .timer = &htim1, .pwm_channel = TIM_CHANNEL_3, .adc_channel = ADC_CHANNEL_2,
+    .feedback_cal = SERVO_J7_ADC_CALIBRATION,
+    .output_limits = SERVO_J7_OUTPUT_LIMITS,
 };
 
-/* 六轴按底座到末端排列，H4 放在备用位 */
+/* J1 到 J5 从底座到末端排列，J6 是夹爪，J7 备用 */
 static Servo_t *const servo_by_id[ARM_SERVO_COUNT] = {
-    [ARM_SERVO_H3] = &servo_h3,
-    [ARM_SERVO_H7] = &servo_h7,
-    [ARM_SERVO_H5] = &servo_h5,
-    [ARM_SERVO_H10] = &servo_h10,
-    [ARM_SERVO_H8] = &servo_h8,
-    [ARM_SERVO_H6] = &servo_h6,
-    [ARM_SERVO_H4_SPARE] = &servo_h4,
+    [ARM_SERVO_J1] = &servo_j1,
+    [ARM_SERVO_J2] = &servo_j2,
+    [ARM_SERVO_J3] = &servo_j3,
+    [ARM_SERVO_J4] = &servo_j4,
+    [ARM_SERVO_J5] = &servo_j5,
+    [ARM_SERVO_J6] = &servo_j6,
+    [ARM_SERVO_J7] = &servo_j7,
 };
 
 Servo_t *Arm_GetServo(ArmServoId_t id)

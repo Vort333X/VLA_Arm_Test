@@ -8,13 +8,13 @@ STM32F103C8T6 裸机控制，使用五路舵机驱动机械臂关节、一路驱
 
 | 用途 | SWD 实例 / 固件编号 | 插座 | PWM | MCU 引脚 | ADC1 通道 / 引脚 |
 |---|---|---|---|---|---|
-| J1 底座旋转 | `servo_h3` / 0 | H3 | TIM1_CH1 | PA8 | IN0 / PA0 |
-| J2 肩俯仰 | `servo_h7` / 1 | H7 | TIM2_CH4 | PB11 | IN6 / PA6 |
-| J3 肘俯仰 | `servo_h5` / 2 | H5 | TIM1_CH2 | PA9 | IN1 / PA1 |
-| J4 腕俯仰 | `servo_h10` / 3 | H10 | TIM2_CH1 | PA15 | IN3 / PA3 |
-| J5 腕滚转 | `servo_h8` / 4 | H8 | TIM2_CH3 | PB10 | IN5 / PA5 |
-| 夹爪开合 | `servo_h6` / 5 | H6 | TIM2_CH2 | PB3 | IN4 / PA4 |
-| 备用 | `servo_h4` / 6 | H4 | TIM1_CH3 | PA10 | IN2 / PA2 |
+| J1 底座旋转 | `servo_j1` / 0 | H3 | TIM1_CH1 | PA8 | IN0 / PA0 |
+| J2 肩俯仰 | `servo_j2` / 1 | H7 | TIM2_CH4 | PB11 | IN6 / PA6 |
+| J3 肘俯仰 | `servo_j3` / 2 | H5 | TIM1_CH2 | PA9 | IN1 / PA1 |
+| J4 腕俯仰 | `servo_j4` / 3 | H10 | TIM2_CH1 | PA15 | IN3 / PA3 |
+| J5 腕滚转 | `servo_j5` / 4 | H8 | TIM2_CH3 | PB10 | IN5 / PA5 |
+| J6 夹爪开合 | `servo_j6` / 5 | H6 | TIM2_CH2 | PB3 | IN4 / PA4 |
+| J7 备用 | `servo_j7` / 6 | H4 | TIM1_CH3 | PA10 | IN2 / PA2 |
 
 H9：PB6 = USART1_TX，PB7 = USART1_RX，115200 / 8N1。USB：PA11 DM、PA12 DP。
 TIM2 全重映射、USART1 重映射；禁用 JTAG 释放 PA15/PB3，保留 SWD。
@@ -56,7 +56,7 @@ IOC 保持单通道规则转换；`ADC_Read()` 在每次读取前切换通道，
 | `Application/Inc/arm_protocol.h`、`Application/Src/arm_protocol.c` | USART1 二进制帧定义、解析和应答 |
 | `Core/Src/main.c` | 初始化和 20 ms 裸机调度 |
 
-按 H 口将独立结构体加入 SWD 观察窗口，例如 `servo_h3`。主要字段如下。
+按轴号将独立结构体加入 SWD 观察窗口，例如 `servo_j1`。主要字段如下。
 
 - `feedback_adc`：本次原始 ADC。
 - `feedback_deg`：换算并滤波后的反馈角度。
@@ -75,10 +75,10 @@ UART_Init();
 Arm_Init();
 ```
 
-标定后在上述初始化后添加，例如先调 H3：
+标定后在上述初始化后添加，例如先调 J1：
 
 ```c
-Servo_t *joint = &servo_h3;
+Servo_t *joint = &servo_j1;
 Servo_SetClosedLoop(joint, 0U);       // 先直接输出 PWM，核对角度和反馈
 Servo_SetTarget(joint, 135.0f);
 Servo_Enable(joint, 1U);
@@ -92,7 +92,7 @@ const float target[ARM_AXIS_COUNT] = {135, 135, 135, 135, 135, 135};
 Arm_SetTargets(target);
 Arm_Enable(1U);                      // 启用六个工作轴
 // Arm_Enable(0U);                   // 关闭六路舵机 PWM
-// Servo_Enable(&servo_h4, 1U);       // 单独启用备用路
+// Servo_Enable(&servo_j7, 1U);       // 单独启用备用路
 ```
 
 `Arm_Update()` 已由主循环每 20 ms 调用，反馈和控制均在主循环执行。
@@ -103,8 +103,8 @@ Arm_Enable(1U);                      // 启用六个工作轴
 在 `servo_config.h` 修改：
 
 1. `SERVO_PWM_MIN_US/MAX_US`：按实际舵机规格和实测修正。
-2. 各路 `SERVO_Hx_ADC_CALIBRATION`：未标定时用 `SERVO_ADC_UNCALIBRATED` 选 ADC 递增（`SERVO_ADC_INCREASING`）或递减（`SERVO_ADC_DECREASING`）。实测后换成 `SERVO_ADC_CALIBRATION(角度A, ADC_A, 角度B, ADC_B)`，数据本身决定方向和比例。
-3. 各路 `SERVO_Hx_OUTPUT_LIMITS`：填装配后的最小和最大命令角，默认 `0～270°`。保留全局 `SERVO_ANGLE_MIN_DEG/MAX_DEG` 作为脉宽映射量程。
+2. 各路 `SERVO_Jx_ADC_CALIBRATION`：未标定时用 `SERVO_ADC_UNCALIBRATED` 选 ADC 递增（`SERVO_ADC_INCREASING`）或递减（`SERVO_ADC_DECREASING`）。实测后换成 `SERVO_ADC_CALIBRATION(角度A, ADC_A, 角度B, ADC_B)`，数据本身决定方向和比例。
+3. 各路 `SERVO_Jx_OUTPUT_LIMITS`：填装配后的最小和最大命令角，默认 `0～270°`。保留全局 `SERVO_ANGLE_MIN_DEG/MAX_DEG` 作为脉宽映射量程。
 4. `SERVO_DEADBAND_DEG`：误差死区，初始 1°。
 5. `SERVO_FEEDBACK_FILTER_ALPHA`：一阶滤波系数，初始 0.25。
 6. `SERVO_CORRECTION_GAIN`、`SERVO_CORRECTION_LIMIT_DEG`：每周期修正增益 0.1、最大偏移 ±15°。
@@ -137,7 +137,7 @@ USART1 使用 115200 / 8N1，无流控，按字节流收发。解析器按帧头
 
 所有多字节整数按小端序编码，最大整帧 522 字节。CRC 多项式 `0x1021`，初值 `0xFFFF`，输入输出不反射，结果异或 `0x0000`。校验字符串 `123456789` 的结果是 `0x29B1`，在线上写作 `B1 29`。
 
-轴掩码 `mask` 的低 6 位依次对应五个关节通道 `H3、H7、H5、H10、H8` 和夹爪通道 `H6`，H4 为备用路。角度字段为无符号 16 位整数，每单位 `0.01°`，例如 `140°` 编码为十进制 `14000`。
+轴掩码 `mask` 的低 6 位依次对应 `J1` 到 `J6`，其中 `J6` 是夹爪，`J7` 备用。角度字段为无符号 16 位整数，每单位 `0.01°`，例如 `140°` 编码为十进制 `14000`。
 
 V2 沿用 V1 的帧结构，为新轴序分配独立的协议版本。网页和 VLA 客户端需使用 V2 轴序与版本字节。
 
@@ -160,7 +160,7 @@ V2 沿用 V1 的帧结构，为新轴序分配独立的协议版本。网页和 
 
 网页使用桌面 Chrome 的 Web Serial，点击连接后选择接到 H9 的 USB 转串口模块对应的 COM 口。网页用 `Uint8Array` 和 `DataView` 生成上述二进制帧，读取时将字节持续送入组帧器，再按 `seq` 匹配应答。第一版使用一问一答，同时只保留一个待应答请求，建议收到应答后再发送下一帧，等待超时可从 300 ms 起调。
 
-页面首次连接先发送 `PING` 校验通信，再用 `READ_FEEDBACK` 更新舵机状态。单轴调试时通过轴掩码选通道。网页末端打点由上位机解算 H7、H5、H10 的平面关节角，并可在同一帧发送手动设定的 H3 朝向。VLA 进程可在上位机处理逆解和轨迹，再通过普通 COM 口发送同一格式的目标。一个 COM 口同一时间由一个客户端打开。
+页面首次连接先发送 `PING` 校验通信，再用 `READ_FEEDBACK` 更新舵机状态。单轴调试时通过轴掩码选通道。网页末端打点由上位机解算 J1 的底座朝向与 J2、J3、J4 的平面关节角，再放在同一帧发送。VLA 进程可在上位机处理逆解和轨迹，再通过普通 COM 口发送同一格式的目标。一个 COM 口同一时间由一个客户端打开。
 
 ## 构建与验证
 
