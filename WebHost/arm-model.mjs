@@ -28,7 +28,7 @@ export function readModel(data) {
         }
         return { name, port, point, axis: scale(axis, 1 / length), adc };
     });
-    return { joints, tcp: data.tcp };
+    return { joints, tcp: data.tcp, collision: data.collision };
 }
 
 function rotate(point, joint, angle) {
@@ -80,7 +80,7 @@ export class ArmView {
         this.nodes = [];
         let drag;
         canvas.addEventListener('pointerdown', event => {
-            if (!this.pose) return;
+            if (!this.span) return;
             drag = { x: event.offsetX, y: event.offsetY, yaw: this.yaw, pitch: this.pitch, moved: false };
             canvas.setPointerCapture(event.pointerId);
         });
@@ -97,7 +97,7 @@ export class ArmView {
         canvas.addEventListener('pointerup', event => {
             if (drag && !drag.moved) {
                 const hit = this.nodes.find(node => Math.hypot(node.x - event.offsetX, node.y - event.offsetY) < 14);
-                if (hit) this.onJoint(hit.port);
+                if (hit) this.onJoint?.(hit.port);
             }
             drag = null;
         });
@@ -105,10 +105,12 @@ export class ArmView {
         new ResizeObserver(() => this.draw()).observe(canvas);
     }
 
-    setPose(pose, selected, span) {
+    setPose(pose, selected, span, reference = null, target = null) {
         this.pose = pose;
         this.selected = selected;
         this.span = span;
+        this.reference = reference;
+        this.target = target;
         this.draw();
     }
 
@@ -122,7 +124,7 @@ export class ArmView {
         const ctx = canvas.getContext('2d');
         ctx.scale(dpr, dpr);
         this.nodes = [];
-        if (!this.pose || !w || !h) return;
+        if (!this.span || !w || !h) return;
 
         const factor = Math.min(w * 0.40, h * 0.62) / (this.span || 1);
         const cy = Math.cos(this.yaw), sy = Math.sin(this.yaw);
@@ -154,6 +156,21 @@ export class ArmView {
             ctx.font = '12px monospace';
             ctx.fillText(label, tip.x + 4, tip.y - 4);
         });
+        if (this.reference) {
+            const points = [...this.reference.joints.map(joint => joint.point), this.reference.tcp].map(project);
+            for (let i = 1; i < points.length; i++) line(points[i - 1], points[i], '#647786', 3);
+        }
+        if (this.pose) this.drawPose(ctx, project, line, origin, grid);
+        if (this.target) {
+            const tip = project(this.target);
+            line({ x: tip.x - 7, y: tip.y }, { x: tip.x + 7, y: tip.y }, '#f5cd81', 2);
+            line({ x: tip.x, y: tip.y - 7 }, { x: tip.x, y: tip.y + 7 }, '#f5cd81', 2);
+            ctx.fillStyle = '#f5cd81';
+            ctx.fillText('目标', tip.x + 12, tip.y + 13);
+        }
+    }
+
+    drawPose(ctx, project, line, origin, grid) {
         this.nodes = this.pose.joints.map(joint => ({ ...project(joint.point), port: joint.port }));
         const tcp = project(this.pose.tcp);
         const points = [origin, ...this.nodes, tcp];

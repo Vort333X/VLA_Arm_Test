@@ -5,8 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="dark">
     <title>机械臂串口调试台</title>
-    <link rel="stylesheet" href="styles.css">
-    <script type="module" src="app.mjs"></script>
+    <link rel="stylesheet" href="styles.css?v=space-2">
 </head>
 <body>
     <header class="bar">
@@ -16,8 +15,8 @@
                 <h1>机械臂串口调试台</h1>
             </div>
             <div class="connect">
-                <span id="link-state" class="badge" role="status">未连接</span>
-                <button id="connect" class="primary" type="button">连接串口</button>
+                <span id="link-state" class="badge" role="status">正在加载</span>
+                <button id="connect" class="primary" type="button" disabled>连接串口</button>
             </div>
         </div>
     </header>
@@ -47,7 +46,7 @@
                     <label for="model-angle" id="model-axis">H3 偏角</label>
                     <input id="model-angle" type="range" min="-135" max="135" step="1" value="0" disabled>
                     <output id="model-angle-value" for="model-angle">0°</output>
-                    <button id="model-reverse" type="button" aria-pressed="false" disabled>轴反向</button>
+                    <button id="model-reverse" type="button" title="整臂和平面选点共用的舵机方向校准" aria-pressed="false" disabled>轴反向</button>
                     <label class="follow-toggle"><input id="model-follow" type="checkbox" disabled>实机跟随</label>
                 </div>
                 <footer class="view-footer">
@@ -77,10 +76,59 @@
             </section>
         </div>
 
+        <section id="planar-panel" class="panel monitor" aria-labelledby="planar-title" hidden>
+            <div class="panel-head">
+                <div>
+                    <h2 id="planar-title">末端空间控制</h2>
+                </div>
+                <button id="planar-send" type="button" disabled>发送末端目标</button>
+            </div>
+            <div class="target-body">
+                <section class="target-view">
+                    <div class="target-caption"><h3>三维姿态</h3><p class="hint"><span class="pose-key">逆解预览</span> · <span class="board-key">板端目标姿态</span> · <span class="point-key">目标点</span></p></div>
+                    <canvas id="target-arm-view" aria-label="末端目标的三维逆解预览，可拖动旋转视角"></canvas>
+                </section>
+                <div class="target-planes">
+                    <section class="target-view">
+                        <div class="target-caption"><h3>俯视 XY</h3><p class="hint">点击改变 X、Y · 保持 Z</p></div>
+                        <canvas id="target-top-view" aria-label="俯视 XY 选点"></canvas>
+                    </section>
+                    <section class="target-view">
+                        <div class="target-caption"><h3>侧视 RZ</h3><p class="hint">沿当前切面选点 · 绿区通过终点检查</p></div>
+                        <canvas id="planar-view" aria-label="侧视 RZ 选点"></canvas>
+                    </section>
+                </div>
+                <div class="planar-controls">
+                    <label>X mm <input id="target-x" type="number" step="0.01"></label>
+                    <label>Y mm <input id="target-y" type="number" step="0.01"></label>
+                    <label>Z mm <input id="target-z" type="number" step="0.01"></label>
+                    <label>夹爪俯仰 ° <input id="planar-pitch" type="number" min="-180" max="180" step="0.01" value="0"></label>
+                    <label>工具滚转 ° <input id="target-roll" type="number" min="-135" max="135" step="0.01" placeholder="保持当前值"></label>
+                </div>
+                <div class="target-jog">
+                    <h3>TCP 微调</h3>
+                    <label>步长 <select id="target-step"><option value="1">1 mm</option><option value="5" selected>5 mm</option><option value="10">10 mm</option></select></label>
+                    <div role="group" aria-label="X 微调"><button type="button" id="jog-x-minus">X −</button><button type="button" id="jog-x-plus">X +</button></div>
+                    <div role="group" aria-label="Y 微调"><button type="button" id="jog-y-minus">Y −</button><button type="button" id="jog-y-plus">Y +</button></div>
+                    <div role="group" aria-label="Z 微调"><button type="button" id="jog-z-minus">Z −</button><button type="button" id="jog-z-plus">Z +</button></div>
+                </div>
+            </div>
+            <footer class="view-footer">
+                <span id="planar-status" role="status">点图预览</span>
+                <output id="planar-point">H3 —　R —</output>
+            </footer>
+        </section>
+
         <section class="panel monitor" aria-labelledby="monitor-title">
             <div class="panel-head">
-                <div><h2 id="monitor-title">六轴反馈</h2></div>
-                <span id="snapshot-status" class="hint mono">等待回包</span>
+                <div>
+                    <h2 id="monitor-title">舵机反馈</h2>
+                    <span id="snapshot-status" class="hint mono">等待回包</span>
+                </div>
+                <div class="model-actions" role="group" aria-label="六路 PWM 控制">
+                    <button id="enable-all" type="button" disabled>全部使能 PWM</button>
+                    <button id="disable-all" type="button" disabled>全部失能 PWM</button>
+                </div>
             </div>
             <div class="table-scroll">
                 <table>
@@ -105,5 +153,25 @@
             </section>
         </div>
     </main>
+    <script>
+        function startupError(message) {
+            const state = document.getElementById('link-state');
+            state.dataset.state = 'error';
+            state.textContent = '启动失败';
+            const result = document.getElementById('control-result');
+            result.dataset.level = 'error';
+            result.textContent = message;
+            document.getElementById('connect').disabled = true;
+        }
+
+        if (location.protocol === 'file:') {
+            startupError('请通过本地服务打开 http://127.0.0.1:8765/');
+        } else {
+            import('./app.mjs?v=space-3').catch(error => {
+                console.error(error);
+                startupError(`网页脚本加载失败 · ${error.message}`);
+            });
+        }
+    </script>
 </body>
 </html>

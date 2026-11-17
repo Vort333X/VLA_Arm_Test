@@ -6,5 +6,14 @@
     { "port": "H10", "point": [0, 0, 225], "axis": [0, -1, 0] },
     { "port": "H8", "point": [0, 0, 295], "axis": [0, 0, 1] }
   ],
-  "tcp": [0, 0, 398]
+  "tcp": [0, 0, 398],
+  "collision": {
+    "floorZ": 0,
+    "baseTopZ": 24,
+    "baseRadius": 85,
+    "linkRadii": [16, 16, 25],
+    "margin": 4,
+    "shoulderMount": 28,
+    "jointRelief": 40
+  }
 }
