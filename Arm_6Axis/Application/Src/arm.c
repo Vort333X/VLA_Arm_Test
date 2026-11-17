@@ -5,30 +5,37 @@
 Servo_t servo_h3 = {
     .timer = &htim1, .pwm_channel = TIM_CHANNEL_1, .adc_channel = ADC_CHANNEL_0,
     .feedback_cal = SERVO_H3_ADC_CALIBRATION,
+    .output_limits = SERVO_H3_OUTPUT_LIMITS,
 };
 Servo_t servo_h5 = {
     .timer = &htim1, .pwm_channel = TIM_CHANNEL_2, .adc_channel = ADC_CHANNEL_1,
     .feedback_cal = SERVO_H5_ADC_CALIBRATION,
+    .output_limits = SERVO_H5_OUTPUT_LIMITS,
 };
 Servo_t servo_h4 = {
     .timer = &htim1, .pwm_channel = TIM_CHANNEL_3, .adc_channel = ADC_CHANNEL_2,
     .feedback_cal = SERVO_H4_ADC_CALIBRATION,
+    .output_limits = SERVO_H4_OUTPUT_LIMITS,
 };
 Servo_t servo_h6 = {
     .timer = &htim2, .pwm_channel = TIM_CHANNEL_2, .adc_channel = ADC_CHANNEL_4,
     .feedback_cal = SERVO_H6_ADC_CALIBRATION,
+    .output_limits = SERVO_H6_OUTPUT_LIMITS,
 };
 Servo_t servo_h8 = {
     .timer = &htim2, .pwm_channel = TIM_CHANNEL_3, .adc_channel = ADC_CHANNEL_5,
     .feedback_cal = SERVO_H8_ADC_CALIBRATION,
+    .output_limits = SERVO_H8_OUTPUT_LIMITS,
 };
 Servo_t servo_h7 = {
     .timer = &htim2, .pwm_channel = TIM_CHANNEL_4, .adc_channel = ADC_CHANNEL_6,
     .feedback_cal = SERVO_H7_ADC_CALIBRATION,
+    .output_limits = SERVO_H7_OUTPUT_LIMITS,
 };
 Servo_t servo_h10 = {
     .timer = &htim2, .pwm_channel = TIM_CHANNEL_1, .adc_channel = ADC_CHANNEL_3,
     .feedback_cal = SERVO_H10_ADC_CALIBRATION,
+    .output_limits = SERVO_H10_OUTPUT_LIMITS,
 };
 
 /* 六轴按底座到末端排列，H4 放在备用位 */

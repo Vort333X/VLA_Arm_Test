@@ -1,24 +1,24 @@
-# 六轴舵机机械臂底层
+# 五轴机械臂与夹爪控制
 
-STM32F103C8T6 裸机控制，六轴加一路备用，通过 USART1 二进制协议收发关节指令和反馈。
+STM32F103C8T6 裸机控制，使用五路舵机驱动机械臂关节、一路驱动夹爪开合，另有一路备用。USART1 二进制协议收发指令和反馈。
 
-## 接口与轴序
+## 接口与通道顺序
 
 每个舵机插座：1 GND、2 舵机电源、3 PWM、4 ADC 反馈。
 
-| 机械轴 | SWD 实例 / 固件编号 | 插座 | PWM | MCU 引脚 | ADC1 通道 / 引脚 |
+| 用途 | SWD 实例 / 固件编号 | 插座 | PWM | MCU 引脚 | ADC1 通道 / 引脚 |
 |---|---|---|---|---|---|
-| J1 | `servo_h3` / 0 | H3 | TIM1_CH1 | PA8 | IN0 / PA0 |
-| J2 | `servo_h7` / 1 | H7 | TIM2_CH4 | PB11 | IN6 / PA6 |
-| J3 | `servo_h5` / 2 | H5 | TIM1_CH2 | PA9 | IN1 / PA1 |
-| J4 | `servo_h10` / 3 | H10 | TIM2_CH1 | PA15 | IN3 / PA3 |
-| J5 | `servo_h8` / 4 | H8 | TIM2_CH3 | PB10 | IN5 / PA5 |
-| J6 | `servo_h6` / 5 | H6 | TIM2_CH2 | PB3 | IN4 / PA4 |
+| J1 底座旋转 | `servo_h3` / 0 | H3 | TIM1_CH1 | PA8 | IN0 / PA0 |
+| J2 肩俯仰 | `servo_h7` / 1 | H7 | TIM2_CH4 | PB11 | IN6 / PA6 |
+| J3 肘俯仰 | `servo_h5` / 2 | H5 | TIM1_CH2 | PA9 | IN1 / PA1 |
+| J4 腕俯仰 | `servo_h10` / 3 | H10 | TIM2_CH1 | PA15 | IN3 / PA3 |
+| J5 腕滚转 | `servo_h8` / 4 | H8 | TIM2_CH3 | PB10 | IN5 / PA5 |
+| 夹爪开合 | `servo_h6` / 5 | H6 | TIM2_CH2 | PB3 | IN4 / PA4 |
 | 备用 | `servo_h4` / 6 | H4 | TIM1_CH3 | PA10 | IN2 / PA2 |
 
 H9：PB6 = USART1_TX，PB7 = USART1_RX，115200 / 8N1。USB：PA11 DM、PA12 DP。
 TIM2 全重映射、USART1 重映射；禁用 JTAG 释放 PA15/PB3，保留 SWD。
-轴序按实机从底座到末端排列，批量控制和串口协议共用这一顺序。
+在用通道按实机从底座到末端排列，批量控制和串口协议共用这一顺序。
 
 ## IOC 与 PWM 分频
 
@@ -50,7 +50,7 @@ IOC 保持单通道规则转换；`ADC_Read()` 在每次读取前切换通道，
 |---|---|
 | `Application/Inc/servo_config.h` | 角度、PWM、ADC 端点、死区和外环参数宏 |
 | `Application/Inc/servo.h`、`Application/Src/servo.c` | 单舵机结构体、换算、反馈滤波、位置修正 |
-| `Application/Inc/arm.h`、`Application/Src/arm.c` | 七路实例表、六轴批量操作 |
+| `Application/Inc/arm.h`、`Application/Src/arm.c` | 七路实例表、六路在用舵机的批量操作 |
 | `Application/Src/adc_io.c`、`pwm_io.c` | ADC 校准/采样、PWM 写入/启停 |
 | `Application/Src/uart_io.c`、`usb_io.c` | UART/USB 收发 |
 | `Application/Inc/arm_protocol.h`、`Application/Src/arm_protocol.c` | USART1 二进制帧定义、解析和应答 |
@@ -85,13 +85,13 @@ Servo_Enable(joint, 1U);
 // 标定结束后再启用外环：Servo_SetClosedLoop(joint, 1U);
 ```
 
-六轴批量操作：
+六路在用舵机的批量操作：
 
 ```c
 const float target[ARM_AXIS_COUNT] = {135, 135, 135, 135, 135, 135};
 Arm_SetTargets(target);
 Arm_Enable(1U);                      // 启用六个工作轴
-// Arm_Enable(0U);                   // 关闭六轴 PWM
+// Arm_Enable(0U);                   // 关闭六路舵机 PWM
 // Servo_Enable(&servo_h4, 1U);       // 单独启用备用路
 ```
 
@@ -103,8 +103,8 @@ Arm_Enable(1U);                      // 启用六个工作轴
 在 `servo_config.h` 修改：
 
 1. `SERVO_PWM_MIN_US/MAX_US`：按实际舵机规格和实测修正。
-2. 各路 `SERVO_Hx_ADC_CALIBRATION`：依次填写 `SERVO_ADC_CALIBRATION(角度A, ADC_A, 角度B, ADC_B)`。角度增大时 ADC 减小，照实填写，换算会自动采用负斜率。
-3. `SERVO_ANGLE_MIN_DEG/MAX_DEG`：有效角度边界。
+2. 各路 `SERVO_Hx_ADC_CALIBRATION`：未标定时用 `SERVO_ADC_UNCALIBRATED` 选 ADC 递增（`SERVO_ADC_INCREASING`）或递减（`SERVO_ADC_DECREASING`）。实测后换成 `SERVO_ADC_CALIBRATION(角度A, ADC_A, 角度B, ADC_B)`，数据本身决定方向和比例。
+3. 各路 `SERVO_Hx_OUTPUT_LIMITS`：填装配后的最小和最大命令角，默认 `0～270°`。保留全局 `SERVO_ANGLE_MIN_DEG/MAX_DEG` 作为脉宽映射量程。
 4. `SERVO_DEADBAND_DEG`：误差死区，初始 1°。
 5. `SERVO_FEEDBACK_FILTER_ALPHA`：一阶滤波系数，初始 0.25。
 6. `SERVO_CORRECTION_GAIN`、`SERVO_CORRECTION_LIMIT_DEG`：每周期修正增益 0.1、最大偏移 ±15°。
@@ -117,7 +117,7 @@ Arm_Enable(1U);                      // 启用六个工作轴
 重复设置相同目标不会清空修正量；失效的 ADC 采样会跳过该路本周期控制。
 `SERVO_CLOSED_LOOP_DEFAULT` 决定实例初始化时的外环开关；PWM 仍需显式使能。
 
-ADC 初值 0/4095 用于占位，按实测标定后再试外环。
+未标定的 ADC 角度按 0～4095 估算，按实测标定后再试外环。
 F103 ADC 引脚输入应在 0～VDDA（板上通常为 3.3 V）范围；若舵机反馈超过此范围，需要硬件分压。
 软件宏只负责换算，不能代替分压。舵机供电地和 MCU 地应共地。
 
@@ -137,7 +137,7 @@ USART1 使用 115200 / 8N1，无流控，按字节流收发。解析器按帧头
 
 所有多字节整数按小端序编码，最大整帧 522 字节。CRC 多项式 `0x1021`，初值 `0xFFFF`，输入输出不反射，结果异或 `0x0000`。校验字符串 `123456789` 的结果是 `0x29B1`，在线上写作 `B1 29`。
 
-从底座到末端的轴序为 `H3、H7、H5、H10、H8、H6`，轴掩码 `mask` 的低 6 位按此顺序对应六轴，H4 为备用路。角度字段为无符号 16 位整数，每单位 `0.01°`，例如 `140°` 编码为十进制 `14000`。
+轴掩码 `mask` 的低 6 位依次对应五个关节通道 `H3、H7、H5、H10、H8` 和夹爪通道 `H6`，H4 为备用路。角度字段为无符号 16 位整数，每单位 `0.01°`，例如 `140°` 编码为十进制 `14000`。
 
 V2 沿用 V1 的帧结构，为新轴序分配独立的协议版本。网页和 VLA 客户端需使用 V2 轴序与版本字节。
 
@@ -152,7 +152,7 @@ V2 沿用 V1 的帧结构，为新轴序分配独立的协议版本。网页和 
 
 `FEEDBACK` 共 38 字节，前两个字节为使能掩码、已采样掩码，随后按轴序重复 `目标角度:u16 + 反馈角度:u16 + ADC 原始值:u16`。已采样位表示曾获得有效 ADC 样本。反馈角度精度取决于各轴实测标定。
 
-上电后 PWM 默认关闭。上位机可以先发送目标，再显式使能选中的轴。当前帧直接设置舵机目标，装配后的各轴有效行程和过渡轨迹由测试上位机选定。串口断开后，固件保持最后的目标与 PWM 使能状态。
+上电和失能时，指令输出角、PWM 计数和对应的 CCR 置 0，并停止该路 PWM。目标角保留，上位机可在失能时设置目标，等显式使能才输出脉冲。任一选中轴的目标越过其输出限位时，整帧拒绝。串口断开后，固件保持最后的目标与 PWM 使能状态。
 
 主循环每轮最多解析 128 字节，串口发送忙时下一轮继续尝试。收发均通过中断，半帧超过 100 ms 无后续数据会丢弃，校验失败或不支持的协议版本静默丢弃。USART1 的 RX 缓冲为 1024 字节，可用 1023 字节，TX 缓冲可一次容纳最大 522 字节整帧。
 
@@ -160,7 +160,7 @@ V2 沿用 V1 的帧结构，为新轴序分配独立的协议版本。网页和 
 
 网页使用桌面 Chrome 的 Web Serial，点击连接后选择接到 H9 的 USB 转串口模块对应的 COM 口。网页用 `Uint8Array` 和 `DataView` 生成上述二进制帧，读取时将字节持续送入组帧器，再按 `seq` 匹配应答。第一版使用一问一答，同时只保留一个待应答请求，建议收到应答后再发送下一帧，等待超时可从 300 ms 起调。
 
-页面首次连接先发送 `PING` 校验通信，再用 `READ_FEEDBACK` 更新关节状态。单轴调试时通过轴掩码选择关节。末端打点或 VLA 输出在上位机进行逆解和轨迹处理，逐帧发送同一格式的关节目标。VLA 进程可通过普通 COM 口客户端接入，与网页使用同一份协议。一个 COM 口同一时间由一个客户端打开。
+页面首次连接先发送 `PING` 校验通信，再用 `READ_FEEDBACK` 更新舵机状态。单轴调试时通过轴掩码选通道。网页末端打点由上位机解算 H7、H5、H10 的平面关节角，并可在同一帧发送手动设定的 H3 朝向。VLA 进程可在上位机处理逆解和轨迹，再通过普通 COM 口发送同一格式的目标。一个 COM 口同一时间由一个客户端打开。
 
 ## 构建与验证
 

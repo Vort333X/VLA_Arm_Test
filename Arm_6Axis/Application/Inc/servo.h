@@ -12,15 +12,21 @@ typedef struct {
 } ServoFeedbackCal_t;
 
 typedef struct {
+    float min_deg;
+    float max_deg;
+} ServoOutputLimits_t;
+
+typedef struct {
     TIM_HandleTypeDef *timer;
     uint32_t pwm_channel;
     uint32_t adc_channel;
     ServoFeedbackCal_t feedback_cal;
+    ServoOutputLimits_t output_limits;
 
     uint16_t feedback_adc;
     float feedback_deg;
     float target_deg;
-    float command_deg;       /* 实际用于换算 PWM 脉宽的指令角度 */
+    float command_deg;       /* 实际输出角度，失能时为 0 */
     float error_deg;
     uint16_t pwm_ticks;
     uint8_t enabled;

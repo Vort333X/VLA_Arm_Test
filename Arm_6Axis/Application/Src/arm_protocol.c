@@ -62,8 +62,9 @@ static ArmProtocolStatus_t SetTargets(const uint8_t *payload, uint16_t length)
     /* 先检查所有选中的轴，整帧通过后再更新目标 */
     for (uint8_t i = 0U; i < ARM_AXIS_COUNT; ++i) {
         degrees[i] = (float)ReadU16(&payload[1U + 2U * i]) / ARM_PROTOCOL_ANGLE_SCALE;
-        if ((mask & (1U << i)) &&
-            (degrees[i] < SERVO_ANGLE_MIN_DEG || degrees[i] > SERVO_ANGLE_MAX_DEG)) {
+        if (!(mask & (1U << i))) continue;
+        const ServoOutputLimits_t *limits = &Arm_GetServo(i)->output_limits;
+        if (degrees[i] < limits->min_deg || degrees[i] > limits->max_deg) {
             return ARM_ACK_BAD_VALUE;
         }
     }
@@ -82,7 +83,7 @@ static ArmProtocolStatus_t SetEnable(const uint8_t *payload, uint16_t length)
 
     for (uint8_t i = 0U; i < ARM_AXIS_COUNT; ++i) {
         Servo_t *servo = Arm_GetServo(i);
-        if ((mask & (1U << i)) && servo->enabled != enable) Servo_Enable(servo, enable);
+        if ((mask & (1U << i)) && (!enable || !servo->enabled)) Servo_Enable(servo, enable);
     }
     return ARM_ACK_OK;
 }
