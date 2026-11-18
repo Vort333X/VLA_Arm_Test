@@ -13,16 +13,13 @@
 #define VAL_LIMIT(value, low, high) \
     (((value) < (low)) ? (low) : (((value) > (high)) ? (high) : (value)))
 
-/* 各路输出限位用舵机命令角填写，实测后收窄，PWM 脉宽映射仍按全量程 */
 #define SERVO_OUTPUT_LIMITS(low, high) { .min_deg = (low), .max_deg = (high) }
 #define SERVO_J1_OUTPUT_LIMITS       SERVO_OUTPUT_LIMITS(0.0f, 270.0f)
 #define SERVO_J2_OUTPUT_LIMITS       SERVO_OUTPUT_LIMITS(100.0f, 216.0f)
 #define SERVO_J3_OUTPUT_LIMITS       SERVO_OUTPUT_LIMITS(50.0f, 260.0f)
 #define SERVO_J4_OUTPUT_LIMITS       SERVO_OUTPUT_LIMITS(83.0f, 230.0f)
 #define SERVO_J5_OUTPUT_LIMITS       SERVO_OUTPUT_LIMITS(0.0f, 270.0f)
-/* J6 实测舵机命令角：60° 张开，140° 闭合 */
-#define SERVO_J6_OUTPUT_LIMITS       SERVO_OUTPUT_LIMITS(60.0f, 140.0f)
-
+#define SERVO_J6_OUTPUT_LIMITS       SERVO_OUTPUT_LIMITS(60.0f, 133.0f)
 #define SERVO_J7_OUTPUT_LIMITS       SERVO_OUTPUT_LIMITS(0.0f, 270.0f)
 // #define SERVO_J1_OUTPUT_LIMITS       SERVO_OUTPUT_LIMITS(0.0f, 270.0f)
 // #define SERVO_J2_OUTPUT_LIMITS       SERVO_OUTPUT_LIMITS(0.0f, 270.0f)
