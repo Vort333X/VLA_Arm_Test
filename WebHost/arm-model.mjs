@@ -1,5 +1,7 @@
 import { AXES } from './protocol.mjs?v=axes-1';
 
+export const SERVO_CENTER = 135;
+
 const legacyPorts = new Map([
     ['H3', 'J1'], ['H7', 'J2'], ['H5', 'J3'], ['H10', 'J4'], ['H8', 'J5'], ['H6', 'J6'],
 ]);
@@ -18,7 +20,7 @@ export function readModel(data) {
     }
     const ports = new Set();
     const joints = data.joints.map((joint, i) => {
-        const { point, axis, adc } = joint;
+        const { point, axis, commandDirection = 1 } = joint;
         const port = legacyPorts.get(joint.port) ?? joint.port;
         if (!AXES.includes(port) || ports.has(port)) throw new Error(`第 ${i + 1} 项的轴号无效或重复`);
         const name = port;
@@ -26,12 +28,10 @@ export function readModel(data) {
         if (!vector(point) || !vector(axis)) throw new Error(`${name} 的轴心和轴方向应为三个数`);
         const length = Math.hypot(...axis);
         if (length < 1e-6) throw new Error(`${name} 的轴方向不能为零`);
-        if (adc !== undefined && (!adc || !Number.isInteger(adc.zero) || !Number.isInteger(adc.atSample) ||
-            adc.zero < 0 || adc.zero > 4095 || adc.atSample < 0 || adc.atSample > 4095 ||
-            !Number.isFinite(adc.angleDeg) || adc.atSample === adc.zero || adc.angleDeg === 0)) {
-            throw new Error(`${name} 的 ADC 标定需要两个不同的测量点`);
+        if (commandDirection !== 1 && commandDirection !== -1) {
+            throw new Error(`${name} 的 commandDirection 必须为 1 或 -1`);
         }
-        return { name, port, point, axis: scale(axis, 1 / length), adc };
+        return { name, port, point, axis: scale(axis, 1 / length), commandDirection };
     });
     const commandLimits = data.commandLimits === undefined ? {} : data.commandLimits;
     if (!commandLimits || typeof commandLimits !== 'object' || Array.isArray(commandLimits)) {
@@ -43,7 +43,7 @@ export function readModel(data) {
             throw new Error(`${port} 的命令角限位无效`);
         }
     }
-    return { joints, tcp: data.tcp, collision: data.collision, commandLimits };
+    return { joints, tcp: data.tcp, collision: data.collision, commandLimits, gripper: data.gripper };
 }
 
 function rotate(point, joint, angle) {
@@ -73,15 +73,17 @@ export function forward(model, degrees) {
     return { joints, tcp: transform(model.tcp, joints.length), tipMark: transform(mark, joints.length) };
 }
 
-export function feedbackAngles(model, axes) {
-    const angles = [];
-    for (const joint of model.joints) {
-        const value = axes.find(axis => axis.port === joint.port);
-        if (!value?.sampled || !joint.adc) return null;
-        const { zero, atSample, angleDeg } = joint.adc;
-        angles.push((value.adc - zero) * angleDeg / (atSample - zero));
-    }
-    return angles;
+export function commandDirection(model, port) {
+    return model?.joints.find(joint => joint.port === port)?.commandDirection ?? 1;
+}
+
+// 机械关节角和板端舵机角只在这里换算
+export function servoToJoint(model, port, servoDeg) {
+    return (servoDeg - SERVO_CENTER) * commandDirection(model, port);
+}
+
+export function jointToServo(model, port, jointDeg) {
+    return SERVO_CENTER + jointDeg * commandDirection(model, port);
 }
 
 export class ArmView {

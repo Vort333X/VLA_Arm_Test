@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="dark">
     <title>机械臂串口调试台</title>
-    <link rel="stylesheet" href="styles.css?v=space-2">
+    <link rel="stylesheet" href="styles.css?v=gripper-slider-1">
 </head>
 <body>
     <header class="bar">
@@ -46,7 +46,7 @@
                     <label for="model-angle" id="model-axis">J1 偏角</label>
                     <input id="model-angle" type="range" min="-135" max="135" step="1" value="0" disabled>
                     <output id="model-angle-value" for="model-angle">0°</output>
-                    <button id="model-reverse" type="button" title="整臂和平面选点共用的舵机方向校准" aria-pressed="false" disabled>轴反向</button>
+                    <span id="model-direction" class="hint"></span>
                     <label class="follow-toggle"><input id="model-follow" type="checkbox" disabled>实机跟随</label>
                 </div>
                 <footer class="view-footer">
@@ -62,15 +62,28 @@
                 <div class="control-body">
                     <label for="joint">舵机通道</label>
                     <select id="joint"></select>
-                    <form id="target-form">
-                        <label for="target">目标舵机角度</label>
-                        <div class="angle-input"><input id="target" type="number" min="0" max="270" step="0.01" inputmode="decimal" required placeholder="0–270"><span>°</span></div>
+                    <form id="target-form" class="angle-form">
+                        <label for="target" id="target-label">目标关节偏角</label>
+                        <div class="angle-input"><input id="target" type="number" min="-135" max="135" step="0.01" inputmode="decimal" required placeholder="−135–135"><span>°</span></div>
                         <button id="send" type="submit" class="primary" disabled>发送目标</button>
                     </form>
                     <div class="servo-switch">
                         <button id="enable" type="button" disabled>使能 PWM</button>
                         <button id="disable" type="button" disabled>关闭 PWM</button>
                     </div>
+                    <p id="gripper-title" class="hint">夹爪 J6 · 使能 PWM 后可操作</p>
+                    <div class="servo-switch" role="group" aria-labelledby="gripper-title">
+                        <button id="gripper-open" type="button" disabled>张开</button>
+                        <button id="gripper-close" type="button" disabled>闭合</button>
+                    </div>
+                    <form id="gripper-target-form" class="angle-form">
+                        <div class="gripper-angle">
+                            <label for="gripper-target">夹爪目标舵机角</label>
+                            <output id="gripper-angle-value" for="gripper-target">135°</output>
+                            <input id="gripper-target" type="range" min="0" max="270" step="1" value="135" disabled>
+                        </div>
+                        <button id="gripper-send" type="submit" disabled>发送夹爪角度</button>
+                    </form>
                     <p id="control-result" class="hint" role="status">连接并通过握手后可发送指令</p>
                 </div>
             </section>
@@ -132,17 +145,17 @@
             </div>
             <div class="table-scroll">
                 <table>
-                    <thead><tr><th scope="col">通道</th><th scope="col">板端目标 °</th><th scope="col">板端反馈 °</th><th scope="col">ADC 原始值</th><th scope="col">PWM</th></tr></thead>
+                    <thead><tr><th scope="col">通道</th><th scope="col">目标 °</th><th scope="col">反馈 °</th><th scope="col">ADC 原始值</th><th scope="col">PWM</th></tr></thead>
                     <tbody id="axis-table"></tbody>
                 </table>
             </div>
-            <p class="table-note hint">板端反馈角取决于固件 ADC 标定，可用原始值逐轴校准</p>
+            <p class="table-note hint">J1–J5 显示关节偏角，J6 显示舵机角。反馈精度取决于固件 ADC 标定。</p>
         </section>
 
         <div class="workspace lower">
             <section class="panel trace-panel" aria-labelledby="trace-title">
                 <div class="panel-head">
-                    <div><h2 id="trace-title">J1 响应曲线</h2><p id="trace-legend" class="hint">目标 / 板端反馈 · 最近 30 秒</p></div>
+                    <div><h2 id="trace-title">J1 响应曲线</h2><p id="trace-legend" class="hint">目标 / 反馈 · 最近 30 秒</p></div>
                     <select id="trace-mode" aria-label="曲线数据"><option value="angle">角度</option><option value="adc">ADC</option></select>
                 </div>
                 <div class="trace-region"><canvas id="trace" aria-label="所选通道反馈曲线"></canvas><p id="trace-empty" class="hint">有反馈数据后显示曲线</p></div>
@@ -167,7 +180,7 @@
         if (location.protocol === 'file:') {
             startupError('请通过本地服务打开 http://127.0.0.1:8765/');
         } else {
-            import('./app.mjs?v=joint-limits-1').catch(error => {
+            import('./app.mjs?v=gripper-slider-1').catch(error => {
                 console.error(error);
                 startupError(`网页脚本加载失败 · ${error.message}`);
             });

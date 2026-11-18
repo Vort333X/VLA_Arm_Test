@@ -1,19 +1,23 @@
 {
   "joints": [
-    { "port": "J1", "point": [0, 0, 0], "axis": [0, 0, 1] },
-    { "port": "J2", "point": [-10, 0, 95], "axis": [0, -1, 0] },
-    { "port": "J3", "point": [-10, 0, 200], "axis": [0, -1, 0] },
-    { "port": "J4", "point": [-10, 0, 290], "axis": [0, -1, 0] },
-    { "port": "J5", "point": [-10, 0, 360], "axis": [0, 0, 1] }
+    { "port": "J1", "commandDirection": -1, "point": [0, 0, 0], "axis": [0, 0, -1] },
+    { "port": "J2", "commandDirection": -1, "point": [10, 0, 95], "axis": [0, 1, 0] },
+    { "port": "J3", "commandDirection": 1, "point": [10, 0, 200], "axis": [0, 1, 0] },
+    { "port": "J4", "commandDirection": 1, "point": [10, 0, 290], "axis": [0, 1, 0] },
+    { "port": "J5", "commandDirection": 1, "point": [10, 0, 360], "axis": [0, 0, 1] }
   ],
-  "tcp": [-10, 0, 463],
+  "tcp": [10, 0, 463],
   "commandLimits": {
     "J1": [0, 270],
     "J2": [100, 216],
     "J3": [50, 260],
     "J4": [83, 230],
     "J5": [0, 270],
-    "J6": [0, 270]
+    "J6": [60, 140]
+  },
+  "gripper": {
+    "closeCommandDeg": 140,
+    "openCommandDeg": 60
   },
   "collision": {
     "floorZ": 0,

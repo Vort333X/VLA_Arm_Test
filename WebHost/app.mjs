@@ -1,24 +1,28 @@
 import { AXES, CMD, MSG, VERSION, checkAck, decodeFeedback, targetsPayload } from './protocol.mjs?v=axes-1';
 import { ArmSerial } from './serial.mjs?v=axes-1';
-import { ArmView, forward, readModel } from './arm-model.mjs?v=joint-limits-1';
+import { ArmView, forward, readModel, SERVO_CENTER, commandDirection, servoToJoint, jointToServo } from './arm-model.mjs?v=gripper-cal-1';
 import { createPlanarIk, PITCH_JOINTS } from './planar-ik.mjs?v=joint-limits-1';
 import { PlanarView, TopView } from './planar-view.mjs?v=auto-pitch-1';
 
 const POLL_MS = 200;
 const STALE_MS = 1000;
 const HISTORY_MS = 30_000;
-const SERVO_CENTER = 135;
 const ALL_PWM_CHANNELS = (1 << AXES.length) - 1;
 const PITCH_AXES = PITCH_JOINTS.map(port => AXES.indexOf(port));
 const YAW_AXIS = AXES.indexOf('J1');
 const ROLL_AXIS = AXES.indexOf('J5');
+const GRIPPER_AXIS = AXES.indexOf('J6');
+const GRIPPER_ACTIONS = [
+    ['gripper-open', 'openCommandDeg', '张开'],
+    ['gripper-close', 'closeCommandDeg', '闭合'],
+];
 const $ = id => document.getElementById(id);
 $('protocol-label').textContent = `USART1 · 协议 V${VERSION}`;
 const axisTable = $('axis-table');
 const angleInput = $('target');
+const gripperInput = $('gripper-target');
 const modelAngle = $('model-angle');
 const modelFollow = $('model-follow');
-const reverseButton = $('model-reverse');
 const targetInputs = ['x', 'y', 'z'].map(axis => $(`target-${axis}`));
 const targetRoll = $('target-roll');
 const planarPitch = $('planar-pitch');
@@ -50,8 +54,8 @@ let history = [];
 let model = null;
 let modelSpan = 0;
 const modelTargets = AXES.map(() => SERVO_CENTER);
-const modelDirections = AXES.map(() => 1);
 let modelDraft = null;
+let gripperDraft = null;
 let planarIk = null;
 let planarSelection = null;
 let sliceYaw = 0;
@@ -63,6 +67,7 @@ const targetTopView = new TopView($('target-top-view'), (x, y) => setSpatialPoin
 const formatAngle = value => value.toFixed(2);
 const clockText = () => new Date().toLocaleTimeString('zh-CN', { hour12: false });
 const feedbackFresh = () => phase === 'ready' && !!latest && performance.now() - latestAt <= STALE_MS;
+const gripperReady = () => feedbackFresh() && latest[GRIPPER_AXIS].enabled;
 
 function log(message, level = 'info') {
     const list = $('log');
@@ -86,14 +91,29 @@ function updateControls() {
     connect.disabled = !navigator.serial || phase === 'opening' || phase === 'closing';
     connect.textContent = phase === 'ready' ? '断开' : '连接串口';
     const busy = phase !== 'ready' || operation === 'command' || !!queued;
-    [angleInput.min, angleInput.max] = jointLimits(selected);
+    const gripper = selected === GRIPPER_AXIS;
+    [angleInput.min, angleInput.max] = gripper ? servoLimits(selected) : modelAngleLimits(selected);
+    $('target-label').textContent = gripper ? '目标舵机角度' : '目标关节偏角';
+    angleInput.disabled = !gripper && !model;
+    angleInput.placeholder = `${angleInput.min}–${angleInput.max}`;
+    const gripperAvailable = gripperReady() && !!model?.commandLimits.J6;
+    [gripperInput.min, gripperInput.max] = servoLimits(GRIPPER_AXIS);
+    gripperInput.value = gripperDraft ?? latest?.[GRIPPER_AXIS]?.targetDeg ?? SERVO_CENTER;
+    $('gripper-angle-value').textContent = `${gripperInput.value}°`;
+    gripperInput.disabled = busy || !gripperAvailable;
+    $('gripper-send').disabled = busy || !gripperAvailable;
+    for (const [id, key, label] of GRIPPER_ACTIONS) {
+        const degrees = gripperCommand(key);
+        $(id).textContent = degrees === null ? label : `${label} ${formatAngle(degrees).replace(/\.00$/, '')}°`;
+        $(id).disabled = busy || !gripperAvailable || degrees === null;
+    }
     [modelAngle.min, modelAngle.max] = modelAngleLimits(selected);
-    for (const id of ['send', 'disable', 'disable-all']) $(id).disabled = busy;
+    $('send').disabled = busy || angleInput.disabled;
+    for (const id of ['disable', 'disable-all']) $(id).disabled = busy;
     for (const id of ['enable', 'enable-all']) $(id).disabled = busy || !feedbackFresh();
     const modelAxis = model?.joints.some(joint => joint.port === AXES[selected]);
     const modelBusy = modelFollow.checked && (busy || !feedbackFresh());
     modelAngle.disabled = !modelAxis || modelBusy;
-    reverseButton.disabled = modelAngle.disabled || operation === 'command' || !!queued;
     $('model-home').disabled = !model || modelBusy;
     modelFollow.disabled = !model || operation === 'command' || !!queued || (!modelFollow.checked && !feedbackFresh());
     renderPlanar(busy);
@@ -124,8 +144,10 @@ function renderFeedback() {
         row.dataset.selected = active;
         button.setAttribute('aria-pressed', String(active));
         const axis = latest?.[index];
-        values[0].textContent = axis ? formatAngle(axis.targetDeg) : '—';
-        values[1].textContent = axis?.sampled ? formatAngle(axis.feedbackDeg) : '—';
+        const target = axis ? displayAngle(index, axis.targetDeg) : null;
+        const feedback = axis?.sampled ? displayAngle(index, axis.feedbackDeg) : null;
+        values[0].textContent = target === null ? '—' : formatAngle(target);
+        values[1].textContent = feedback === null ? '—' : formatAngle(feedback);
         values[2].textContent = axis?.sampled ? String(axis.adc) : '—';
         values[3].textContent = axis ? (axis.enabled ? '已使能' : '关闭') : '—';
         values[3].dataset.enabled = Boolean(fresh && axis?.enabled);
@@ -137,26 +159,38 @@ function renderFeedback() {
 }
 
 function modelOffset(axis, target = modelTargets[axis]) {
-    return (target - SERVO_CENTER) * modelDirections[axis];
+    return servoToJoint(model, AXES[axis], target);
 }
 
-function jointLimits(axis, activeModel = model) {
+function displayAngle(axis, servoDeg) {
+    if (axis === GRIPPER_AXIS) return servoDeg;
+    return model ? modelOffset(axis, servoDeg) : null;
+}
+
+function servoLimits(axis, activeModel = model) {
     return activeModel?.commandLimits[AXES[axis]] ?? [0, 2 * SERVO_CENTER];
 }
 
-function modelAngleLimits(axis, activeModel = model, direction = modelDirections[axis]) {
-    const [min, max] = jointLimits(axis, activeModel);
-    return direction === 1 ? [min - SERVO_CENTER, max - SERVO_CENTER] : [SERVO_CENTER - max, SERVO_CENTER - min];
+function gripperCommand(key) {
+    const command = model?.gripper?.[key];
+    const [min, max] = servoLimits(GRIPPER_AXIS);
+    return Number.isFinite(command) && command >= min && command <= max ? command : null;
 }
 
-function makePlanarIk(activeModel, directions) {
-    const limits = Object.fromEntries(AXES.map((port, axis) => [port, modelAngleLimits(axis, activeModel, directions?.[axis] ?? 1)]));
+function modelAngleLimits(axis, activeModel = model) {
+    return servoLimits(axis, activeModel)
+        .map(value => servoToJoint(activeModel, AXES[axis], value))
+        .sort((a, b) => a - b);
+}
+
+function makePlanarIk(activeModel) {
+    const limits = Object.fromEntries(AXES.map((port, axis) => [port, modelAngleLimits(axis, activeModel)]));
     return createPlanarIk(activeModel, SERVO_CENTER, limits);
 }
 
 function commandLimitIssue(targets) {
     for (const [axis, degrees] of targets) {
-        const [min, max] = jointLimits(axis);
+        const [min, max] = servoLimits(axis);
         const command = Math.round(degrees * 100) / 100;
         if (command < min || command > max) return `${AXES[axis]} 的舵机目标须在 ${min}° 到 ${max}° 之间`;
     }
@@ -175,7 +209,8 @@ function renderModel() {
     modelAngle.value = angle ?? 0;
     $('model-axis').textContent = `${AXES[selected]} 偏角`;
     $('model-angle-value').textContent = angle === undefined ? '—' : `${formatAngle(angle)}°`;
-    reverseButton.setAttribute('aria-pressed', String(modelDirections[selected] === -1));
+    const direction = commandDirection(model, AXES[selected]);
+    $('model-direction').textContent = angle === undefined ? '' : direction === 1 ? '命令同向' : '命令反向';
     const pose = forward(model, angles);
     let status = modelFollow.checked ? '三维指令 · 实机跟随' : '三维指令 · 预览';
     if (modelFollow.checked && angle !== undefined && feedbackFresh() && !latest[selected].enabled) {
@@ -188,7 +223,7 @@ function renderModel() {
 
 function planarTargets({ angles, yaw, roll }) {
     const target = (axis, offset) => {
-        const degrees = SERVO_CENTER + offset * modelDirections[axis];
+        const degrees = jointToServo(model, AXES[axis], offset);
         return [axis, Math.round(degrees * 100) / 100];
     };
     const targets = angles.map((angle, i) => target(PITCH_AXES[i], angle));
@@ -301,14 +336,16 @@ function drawTrace() {
     const ctx = canvas.getContext('2d');
     ctx.scale(dpr, dpr);
     const isAdc = $('trace-mode').value === 'adc';
-    $('trace-legend').textContent = isAdc ? 'ADC 原始值 · 最近 30 秒' : '目标（绿） / 板端反馈（蓝） · 最近 30 秒';
+    const unit = selected === GRIPPER_AXIS ? '舵机角' : '关节偏角';
+    $('trace-legend').textContent = isAdc ? 'ADC 原始值 · 最近 30 秒' : `${unit} · 目标（绿） / 反馈（蓝） · 最近 30 秒`;
     const now = performance.now();
     const windowed = history.filter(sample => now - sample.t <= HISTORY_MS);
     const traces = isAdc ? [{ field: 'adc', color: '#f5cd81' }] :
         [{ field: 'targetDeg', color: '#9df7d1' }, { field: 'feedbackDeg', color: '#88b9fb' }];
     const points = traces.map(trace => windowed.map(sample => {
         const axis = sample.axes[selected];
-        return { t: sample.t, value: axis.sampled || trace.field === 'targetDeg' ? axis[trace.field] : null };
+        const value = axis.sampled || trace.field === 'targetDeg' ? axis[trace.field] : null;
+        return { t: sample.t, value: isAdc || value === null ? value : displayAngle(selected, value) };
     }));
     const values = points.flatMap(series => series.map(point => point.value).filter(Number.isFinite));
     $('trace-empty').hidden = values.length > 0;
@@ -444,6 +481,7 @@ async function disconnect(message, failed = false) {
     operation = null;
     modelFollow.checked = false;
     modelDraft = null;
+    gripperDraft = null;
     if (planarSelection) planarSelection.sent = false;
     setPhase('closing', '正在关闭');
     await current?.close();
@@ -485,10 +523,52 @@ $('joint').addEventListener('change', event => selectJoint(Number(event.target.v
 angleInput.addEventListener('input', () => { edits[selected] = angleInput.value; });
 $('target-form').addEventListener('submit', event => {
     event.preventDefault();
-    const degrees = angleInput.valueAsNumber;
-    try { sendTargets([[selected, degrees]], `${AXES[selected]} 目标 ${formatAngle(degrees)}°`); }
-    catch (error) { result(error.message, 'error'); }
+    if ($('send').disabled) return;
+    const angle = angleInput.valueAsNumber;
+    const currentModel = model;
+    const gripper = selected === GRIPPER_AXIS;
+    const degrees = gripper ? angle : jointToServo(currentModel, AXES[selected], angle);
+    const label = `${AXES[selected]} 目标${gripper ? '舵机角' : '偏角'} ${formatAngle(angle)}°`;
+    try {
+        sendTargets([[selected, degrees]], label, undefined,
+            () => !gripper && model !== currentModel ? '模型已更换，请重新输入目标' : null);
+    } catch (error) { result(error.message, 'error'); }
 });
+function sendGripperTarget(degrees, label, validate) {
+    try {
+        const targets = [[GRIPPER_AXIS, degrees]];
+        sendTargets(targets, label, accepted => {
+            if (accepted) gripperDraft = null;
+            finishTargets(targets, accepted);
+        }, () => {
+            if (!gripperReady()) return '请先使能 J6 的 PWM';
+            return validate?.();
+        });
+    } catch (error) { result(error.message, 'error'); }
+}
+
+gripperInput.addEventListener('input', () => {
+    gripperDraft = gripperInput.valueAsNumber;
+    $('gripper-angle-value').textContent = `${gripperInput.value}°`;
+});
+
+$('gripper-target-form').addEventListener('submit', event => {
+    event.preventDefault();
+    if ($('gripper-send').disabled) return;
+    const degrees = gripperInput.valueAsNumber;
+    sendGripperTarget(degrees, `J6 夹爪目标 ${formatAngle(degrees)}°`);
+});
+
+for (const [id, key, label] of GRIPPER_ACTIONS) {
+    $(id).addEventListener('click', () => {
+        if ($(id).disabled) return;
+        const degrees = gripperCommand(key);
+        if (degrees === null) return;
+        sendGripperTarget(degrees, `J6 夹爪${label} · 命令 ${degrees}°`,
+            () => gripperCommand(key) === degrees ? null : '夹爪预设已更换，请重新操作');
+    });
+}
+
 for (const [id, enabled, all] of [
     ['enable', 1, false], ['disable', 0, false],
     ['enable-all', 1, true], ['disable-all', 0, true],
@@ -515,7 +595,7 @@ modelFollow.addEventListener('change', () => {
 });
 
 modelAngle.addEventListener('input', () => {
-    modelDraft = SERVO_CENTER + modelAngle.valueAsNumber * modelDirections[selected];
+    modelDraft = jointToServo(model, AXES[selected], modelAngle.valueAsNumber);
     updateControls();
     renderModel();
 });
@@ -527,15 +607,6 @@ modelAngle.addEventListener('change', () => {
 
 modelAngle.addEventListener('pointercancel', () => {
     modelDraft = null;
-    renderModel();
-});
-
-reverseButton.addEventListener('click', () => {
-    modelDirections[selected] *= -1;
-    modelDraft = null;
-    planarIk = makePlanarIk(model, modelDirections);
-    if (planarSelection) updateSpatialTarget();
-    else updateControls();
     renderModel();
 });
 
@@ -572,6 +643,9 @@ function loadModel(data) {
     if (data.commandLimits === undefined && model) measured.commandLimits = model.commandLimits;
     const ik = makePlanarIk(measured);
     model = measured;
+    gripperDraft = null;
+    AXES.forEach((_, i) => { if (i !== GRIPPER_AXIS) edits[i] = ''; });
+    angleInput.value = edits[selected];
     planarIk = ik;
     planarSelection = null;
     sliceYaw = 0;
@@ -584,7 +658,6 @@ function loadModel(data) {
     modelFollow.checked = false;
     modelDraft = null;
     modelTargets.fill(SERVO_CENTER);
-    modelDirections.fill(1);
     modelSpan = Math.max(...[...model.joints.map(joint => joint.point), model.tcp].map(point => Math.hypot(...point)), 1);
     $('model-empty').hidden = true;
     $('pose-control').hidden = false;

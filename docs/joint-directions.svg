@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="470" viewBox="0 0 960 470" role="img" aria-labelledby="title desc">
+  <title id="title">机械臂坐标与关节正方向</title>
+  <desc id="desc">俯视 XY：从 +X 起算，J1 顺时针为正。侧视 RZ：R 向右，Z 向上，J2、J3、J4 顺时针为正。</desc>
+  <defs>
+    <marker id="axis" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#93a9bc"/></marker>
+    <marker id="positive" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#ffd079"/></marker>
+    <style>
+      text { font-family: "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; fill: #eef4fa; }
+      .subtitle { font-size: 14px; fill: #bbcddd; }
+      .axis-label { font-size: 16px; fill: #c9d9e6; }
+      .joint { font-size: 15px; font-weight: 650; }
+      .axis { fill: none; stroke: #93a9bc; stroke-width: 2; marker-end: url(#axis); }
+      .positive { fill: none; stroke: #ffd079; stroke-width: 3; marker-end: url(#positive); }
+      .gold { fill: #ffd079; }
+    </style>
+  </defs>
+  <rect width="960" height="470" rx="16" fill="#101923"/>
+  <text x="28" y="42" font-size="24" font-weight="700">机械臂坐标与关节正方向</text>
+  <text x="932" y="42" text-anchor="end" class="subtitle">方向示意 · 非比例图</text>
+  <rect x="24" y="63" width="330" height="362" rx="12" fill="#172431" stroke="#354959"/>
+  <rect x="369" y="63" width="567" height="362" rx="12" fill="#172431" stroke="#354959"/>
+
+  <text x="44" y="99" font-size="19" font-weight="650">俯视 XY</text>
+  <text x="44" y="123" class="subtitle">从 +Z 向底座看</text>
+  <path class="axis" d="M63 236 H324"/>
+  <path class="axis" d="M188 347 V151"/>
+  <text x="322" y="225" class="axis-label">+X</text>
+  <text x="199" y="158" class="axis-label">+Y</text>
+  <path d="M195 236 H312" stroke="#80d9da" stroke-width="3" stroke-dasharray="6 4"/>
+  <text x="203" y="198" class="subtitle">J1 = 0° · +R 朝 +X</text>
+  <path class="positive" d="M244 236 A56 56 0 0 1 188 292"/>
+  <text x="221" y="299" class="gold" font-size="16">+J1</text>
+  <circle cx="188" cy="236" r="6" fill="#80d9da"/>
+  <text x="199" y="256" class="joint">J1</text>
+  <text x="44" y="397" class="gold" font-size="16">从 +X 起算，顺时针为正</text>
+
+  <text x="389" y="99" font-size="19" font-weight="650">侧视 RZ</text>
+  <text x="389" y="123" class="subtitle">切面随 J1 旋转 · 回中时为 XZ 平面，+R 朝 +X</text>
+  <path class="axis" d="M406 357 H903"/>
+  <path class="axis" d="M481 369 V146"/>
+  <text x="868" y="346" class="axis-label">+R</text>
+  <text x="493" y="155" class="axis-label">+Z</text>
+  <rect x="437" y="341" width="88" height="16" rx="4" fill="#4a5f72"/>
+  <path d="M481 344 L492 310 L547 236 L641 194 L717 194 L839 194" fill="none" stroke="#80d9da" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <g fill="#1c3949" stroke="#b3edf0" stroke-width="2">
+    <circle cx="492" cy="310" r="7"/><circle cx="547" cy="236" r="7"/><circle cx="641" cy="194" r="7"/><circle cx="717" cy="194" r="7"/>
+  </g>
+  <path class="positive" d="M490 280 A30 30 0 0 1 522 308"/>
+  <path class="positive" d="M545 206 A30 30 0 0 1 577 234"/>
+  <path class="positive" d="M639 164 A30 30 0 0 1 671 192"/>
+  <text x="502" y="333" class="joint">J2</text>
+  <text x="555" y="258" class="joint">J3</text>
+  <text x="650" y="218" class="joint">J4</text>
+  <text x="703" y="219" class="joint">J5</text>
+  <text x="789" y="220" class="subtitle">工具轴</text>
+  <path d="M839 186 L847 194 L839 202 L831 194 Z" fill="#ffd079"/>
+  <text x="848" y="185" class="joint">TCP</text>
+  <text x="389" y="397" class="gold" font-size="16">J2–J4 顺时针为正</text>
+  <text x="591" y="397" class="subtitle">每轴相对于上一段连杆</text>
+  <text x="28" y="452" class="subtitle">黄色箭头表示关节正向 · J5 沿工具轴滚转 · J6 仅控制夹爪开合</text>
+</svg>
