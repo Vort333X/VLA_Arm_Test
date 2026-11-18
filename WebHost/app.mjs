@@ -1,8 +1,8 @@
 import { AXES, CMD, MSG, VERSION, checkAck, decodeFeedback, targetsPayload } from './protocol.mjs?v=axes-1';
 import { ArmSerial } from './serial.mjs?v=axes-1';
 import { ArmView, forward, readModel } from './arm-model.mjs?v=axes-1';
-import { createPlanarIk, PITCH_JOINTS } from './planar-ik.mjs?v=axes-1';
-import { PlanarView, TopView } from './planar-view.mjs?v=axes-1';
+import { createPlanarIk, PITCH_JOINTS } from './planar-ik.mjs?v=auto-pitch-1';
+import { PlanarView, TopView } from './planar-view.mjs?v=auto-pitch-1';
 
 const POLL_MS = 200;
 const STALE_MS = 1000;
@@ -183,7 +183,8 @@ function planarMotionIssue(ik, targets) {
     return reason ? { reason, pathBlocked: true } : null;
 }
 
-const validPitch = pitch => Number.isFinite(pitch) && Math.abs(pitch) <= 180;
+const validPitch = pitch => pitch === null || (Number.isFinite(pitch) && Math.abs(pitch) <= 180);
+const readPitch = () => planarPitch.value === '' && !planarPitch.validity.badInput ? null : planarPitch.valueAsNumber;
 
 function renderSpatialPreview(selection) {
     if (!planarIk) return;
@@ -203,17 +204,18 @@ function renderSpatialPreview(selection) {
 }
 
 function renderPlanar(busy) {
-    const pitch = planarPitch.valueAsNumber;
+    const pitch = readPitch();
     const selection = planarSelection;
     const yaw = selection?.yaw;
     const r = selection?.point ? selection.point[0] + planarIk.shoulderR : null;
     const yawText = yaw === null ? '保持' : (yaw === undefined ? '—' : `${yaw.toFixed(1)}°`);
     $('planar-point').textContent = `J1 ${yawText}　R ${r === null ? '—' : `${r.toFixed(1)} mm`}`;
+    if (selection?.angles) $('planar-point').textContent += `　${pitch === null ? '自动俯仰' : '俯仰'} ${selection.pitch.toFixed(1)}°`;
 
     let issue;
     let pathBlocked = false;
     if (!planarIk) issue = '当前模型不支持空间选点';
-    else if (!validPitch(pitch)) issue = '夹爪俯仰偏角须在 −180° 到 180° 之间';
+    else if (!validPitch(pitch)) issue = '夹爪俯仰须在 −180° 到 180° 之间，或留空自动';
     else if (selection?.issue) issue = selection.issue;
     else if (!planarIk.collision) issue = '仅几何预览 · 缺少平面防撞尺寸';
     else if (!selection) issue = '在视图中选点，或填全 XYZ 预览';
@@ -241,14 +243,18 @@ function setSpatialPoint(point) {
 }
 
 function updateSpatialTarget() {
-    const pitch = planarPitch.valueAsNumber;
+    const pitch = readPitch();
     const world = targetInputs.map(input => input.valueAsNumber);
     const roll = targetRoll.value === '' && !targetRoll.validity.badInput ? null : targetRoll.valueAsNumber;
+    const previousAngles = planarSelection?.angles ?? null;
     planarSelection = null;
     if (planarIk && validPitch(pitch) && world.every(Number.isFinite)) {
-        const pose = planarIk.solveSpatial(world, pitch, sliceYaw);
-        const geometric = pose?.angles ? null : planarIk.solveSpatial(world, pitch, sliceYaw, false);
-        let issue = pose?.angles ? null : '当前夹爪俯仰下不可达';
+        const near = pitch === null
+            ? (feedbackFresh() ? PITCH_AXES.map(axis => modelOffset(axis, latest[axis].targetDeg)) : previousAngles)
+            : null;
+        const pose = planarIk.solveSpatial(world, pitch, sliceYaw, true, near);
+        const geometric = pose?.angles ? null : planarIk.solveSpatial(world, pitch, sliceYaw, false, near);
+        let issue = pose?.angles ? null : (pitch === null ? '当前位置未找到可行姿态' : '当前夹爪俯仰下不可达');
         if (geometric?.angles) issue = planarIk.collisionAt(geometric.angles);
         if (roll !== null && (!Number.isFinite(roll) || Math.abs(roll) > SERVO_CENTER)) issue = '工具滚转须在 −135° 到 135° 之间，或留空';
         const displayPose = geometric?.angles ? { ...geometric, angles: null } : pose;
@@ -540,7 +546,7 @@ function loadModel(data) {
     planarSelection = null;
     sliceYaw = 0;
     targetPreviewKey = undefined;
-    planarPitch.value = '0';
+    planarPitch.value = '';
     targetRoll.value = '';
     const defaults = ik ? [...ik.baseXY, ik.shoulderZ + ik.reach * 0.87] : [NaN, NaN, NaN];
     defaults.forEach((value, i) => { targetInputs[i].value = Number.isFinite(value) ? String(Number(value.toFixed(2))) : ''; });

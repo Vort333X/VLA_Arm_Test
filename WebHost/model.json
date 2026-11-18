@@ -1,18 +1,18 @@
 {
   "joints": [
     { "port": "J1", "point": [0, 0, 0], "axis": [0, 0, 1] },
-    { "port": "J2", "point": [0, 0, 30], "axis": [0, -1, 0] },
-    { "port": "J3", "point": [0, 0, 135], "axis": [0, -1, 0] },
-    { "port": "J4", "point": [0, 0, 225], "axis": [0, -1, 0] },
-    { "port": "J5", "point": [0, 0, 295], "axis": [0, 0, 1] }
+    { "port": "J2", "point": [-10, 0, 95], "axis": [0, -1, 0] },
+    { "port": "J3", "point": [-10, 0, 200], "axis": [0, -1, 0] },
+    { "port": "J4", "point": [-10, 0, 290], "axis": [0, -1, 0] },
+    { "port": "J5", "point": [-10, 0, 360], "axis": [0, 0, 1] }
   ],
-  "tcp": [0, 0, 398],
+  "tcp": [-10, 0, 463],
   "collision": {
     "floorZ": 0,
-    "baseTopZ": 24,
-    "baseRadius": 85,
+    "baseTopZ": 78,
+    "baseRadius": 60,
     "linkRadii": [16, 16, 25],
-    "margin": 4,
+    "margin": 8,
     "shoulderMount": 28,
     "jointRelief": 40
   }

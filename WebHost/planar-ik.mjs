@@ -66,7 +66,11 @@ export function createPlanarIk(model, limitDeg) {
         return null;
     }
 
-    function solve(x, z, pitch, checkCollision = true) {
+    function poseCost(angles, near) {
+        return angles.reduce((sum, angle, i) => sum + (angle - (near?.[i] ?? 0)) ** 2, 0);
+    }
+
+    function solveFixed(x, z, pitch, checkCollision, near) {
         // 按设定的夹爪俯仰，把目标换算成腕轴位置
         const toolAngle = reference[2] + pitch * DEG;
         const wx = x - tool * Math.sin(toolAngle);
@@ -84,13 +88,50 @@ export function createPlanarIk(model, limitDeg) {
             const angles = rotation.map((turn, i) => sign[i] * wrap(turn) / DEG);
             if (angles.some(angle => Math.abs(angle) > limitDeg + 1e-7)) continue;
             if (checkCollision && collisionAt(angles)) continue;
-            const cost = angles.reduce((total, angle) => total + angle ** 2, 0);
+            const cost = poseCost(angles, near);
             if (cost < bestCost) {
                 best = angles;
                 bestCost = cost;
             }
         }
         return best;
+    }
+
+    function toolPitch(angles) {
+        return angles.reduce((sum, angle, i) => sum + angle * sign[i], 0);
+    }
+
+    function solve(x, z, pitch, checkCollision = true, near = null) {
+        if (pitch !== null) return solveFixed(x, z, pitch, checkCollision, near);
+        // 自动俯仰先粗搜，再在最优候选附近细搜，位置仍由解析逆解精确满足
+        let best = null;
+        let bestPitch = 0;
+        let bestCost = Infinity;
+        function consider(value) {
+            const angles = solveFixed(x, z, value, checkCollision, near);
+            if (!angles) return;
+            const cost = poseCost(angles, near);
+            if (cost < bestCost) {
+                best = angles;
+                bestPitch = value;
+                bestCost = cost;
+            }
+        }
+        if (near) consider(wrap(toolPitch(near) * DEG) / DEG);
+        for (let value = -180; value <= 180; value += 5) consider(value);
+        if (best) {
+            const center = bestPitch;
+            for (let value = center - 5; value <= center + 5; value += 0.5) consider(wrap(value * DEG) / DEG);
+        }
+        return best;
+    }
+
+    function reachable(x, z, pitch) {
+        if (pitch !== null) return !!solveFixed(x, z, pitch, true, null);
+        for (let value = -180; value <= 180; value += 5) {
+            if (solveFixed(x, z, value, true, null)) return true;
+        }
+        return false;
     }
 
     function worldPoint(sliceYaw, r, z) {
@@ -101,7 +142,7 @@ export function createPlanarIk(model, limitDeg) {
         return [yaw.point[0] + x * radius, yaw.point[1] + y * radius, z];
     }
 
-    function solveSpatial(target, pitch, preferredYaw = 0, checkCollision = true) {
+    function solveSpatial(target, pitch, preferredYaw = 0, checkCollision = true, near = null) {
         const [x, y, z] = sub(target, [yaw.point[0], yaw.point[1], 0]);
         const radius = Math.hypot(x, y);
         const heading = Math.atan2(front[0] * y - front[1] * x, front[0] * x + front[1] * y);
@@ -115,14 +156,14 @@ export function createPlanarIk(model, limitDeg) {
             if (Math.abs(sliceYaw) > limitDeg + 1e-7) continue;
             const point = [distance - shoulderR, z];
             const yawTarget = radius < 1e-6 ? null : sliceYaw;
-            const angles = solve(...point, pitch, checkCollision);
+            const angles = solve(...point, pitch, checkCollision, near);
             const pose = { sliceYaw, yaw: yawTarget, point, angles };
-            if (angles) return pose;
+            if (angles) return { ...pose, pitch: toolPitch(angles) };
             nearest ??= pose;
         }
         return nearest;
     }
 
-    return { reach, shoulderZ, collision, project, solve, collisionAt, pathCollision,
+    return { reach, shoulderZ, collision, project, solve, reachable, collisionAt, pathCollision,
         shoulderR, baseXY: yaw.point.slice(0, 2), worldPoint, solveSpatial };
 }

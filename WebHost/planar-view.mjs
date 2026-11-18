@@ -16,6 +16,7 @@ export class PlanarView {
 
     setPose(ik, pitch, selected, pathBlocked) {
         if (ik === this.ik && selected === this.selected && Object.is(pitch, this.pitch) && pathBlocked === this.pathBlocked) return;
+        if (ik !== this.ik || !Object.is(pitch, this.pitch)) this.reachableCells = new Map();
         this.ik = ik;
         this.pitch = pitch;
         this.selected = selected;
@@ -61,7 +62,9 @@ export class PlanarView {
         const step = Math.max(12, extent / 40, (zMax - zMin) / 40);
         for (let x = -extent; x < extent; x += step) {
             for (let z = zMin; z < zMax; z += step) {
-                if (!ik.solve(x + step / 2, z + step / 2, pitch)) continue;
+                const key = `${x},${z},${step}`;
+                if (!this.reachableCells.has(key)) this.reachableCells.set(key, ik.reachable(x + step / 2, z + step / 2, pitch));
+                if (!this.reachableCells.get(key)) continue;
                 const [px, py] = toPixel([x, z + step]);
                 ctx.fillRect(px, py, step * scale + 0.3, step * scale + 0.3);
             }
