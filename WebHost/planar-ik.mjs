@@ -10,9 +10,14 @@ const cross = ([x, y, z], [u, v, w]) => [y * w - z * v, z * u - x * w, x * v - y
 const nearZero = v => Math.hypot(...v) < 0.05;
 const wrap = angle => Math.atan2(Math.sin(angle), Math.cos(angle));
 
-export function createPlanarIk(model, limitDeg) {
+export function createPlanarIk(model, limitDeg, angleLimits = {}) {
     const ports = ['J1', ...PITCH_JOINTS, 'J5'];
     if (model.joints.length !== ports.length || model.joints.some((joint, i) => joint.port !== ports[i])) return null;
+
+    const fullRange = [-limitDeg, limitDeg];
+    const yawLimits = angleLimits.J1 ?? fullRange;
+    const pitchLimits = PITCH_JOINTS.map(port => angleLimits[port] ?? fullRange);
+    const withinLimits = (angle, [min, max]) => angle >= min - 1e-7 && angle <= max + 1e-7;
 
     const [yaw, shoulder, elbow, wrist, roll] = model.joints;
     const normal = shoulder.axis;
@@ -86,7 +91,7 @@ export function createPlanarIk(model, limitDeg) {
             const turnB = upperAngle + elbowAngle - reference[1];
             const rotation = [turnA, turnB - turnA, toolAngle - reference[2] - turnB];
             const angles = rotation.map((turn, i) => sign[i] * wrap(turn) / DEG);
-            if (angles.some(angle => Math.abs(angle) > limitDeg + 1e-7)) continue;
+            if (!angles.every((angle, i) => withinLimits(angle, pitchLimits[i]))) continue;
             if (checkCollision && collisionAt(angles)) continue;
             const cost = poseCost(angles, near);
             if (cost < bestCost) {
@@ -146,14 +151,15 @@ export function createPlanarIk(model, limitDeg) {
         const [x, y, z] = sub(target, [yaw.point[0], yaw.point[1], 0]);
         const radius = Math.hypot(x, y);
         const heading = Math.atan2(front[0] * y - front[1] * x, front[0] * x + front[1] * y);
-        const choices = radius < 1e-6 ? [[preferredYaw, 0]] : [
+        const heldYaw = Math.max(yawLimits[0], Math.min(yawLimits[1], preferredYaw));
+        const choices = radius < 1e-6 ? [[heldYaw, 0]] : [
             [heading / (yaw.axis[2] * DEG), radius],
             [wrap(heading + Math.PI) / (yaw.axis[2] * DEG), -radius],
         ];
         choices.sort(([a], [b]) => Math.abs(a - preferredYaw) - Math.abs(b - preferredYaw));
         let nearest = null;
         for (const [sliceYaw, distance] of choices) {
-            if (Math.abs(sliceYaw) > limitDeg + 1e-7) continue;
+            if (!withinLimits(sliceYaw, yawLimits)) continue;
             const point = [distance - shoulderR, z];
             const yawTarget = radius < 1e-6 ? null : sliceYaw;
             const angles = solve(...point, pitch, checkCollision, near);

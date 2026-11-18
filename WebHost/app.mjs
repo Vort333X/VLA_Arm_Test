@@ -1,7 +1,7 @@
 import { AXES, CMD, MSG, VERSION, checkAck, decodeFeedback, targetsPayload } from './protocol.mjs?v=axes-1';
 import { ArmSerial } from './serial.mjs?v=axes-1';
-import { ArmView, forward, readModel } from './arm-model.mjs?v=axes-1';
-import { createPlanarIk, PITCH_JOINTS } from './planar-ik.mjs?v=auto-pitch-1';
+import { ArmView, forward, readModel } from './arm-model.mjs?v=joint-limits-1';
+import { createPlanarIk, PITCH_JOINTS } from './planar-ik.mjs?v=joint-limits-1';
 import { PlanarView, TopView } from './planar-view.mjs?v=auto-pitch-1';
 
 const POLL_MS = 200;
@@ -86,6 +86,8 @@ function updateControls() {
     connect.disabled = !navigator.serial || phase === 'opening' || phase === 'closing';
     connect.textContent = phase === 'ready' ? '断开' : '连接串口';
     const busy = phase !== 'ready' || operation === 'command' || !!queued;
+    [angleInput.min, angleInput.max] = jointLimits(selected);
+    [modelAngle.min, modelAngle.max] = modelAngleLimits(selected);
     for (const id of ['send', 'disable', 'disable-all']) $(id).disabled = busy;
     for (const id of ['enable', 'enable-all']) $(id).disabled = busy || !feedbackFresh();
     const modelAxis = model?.joints.some(joint => joint.port === AXES[selected]);
@@ -138,6 +140,29 @@ function modelOffset(axis, target = modelTargets[axis]) {
     return (target - SERVO_CENTER) * modelDirections[axis];
 }
 
+function jointLimits(axis, activeModel = model) {
+    return activeModel?.commandLimits[AXES[axis]] ?? [0, 2 * SERVO_CENTER];
+}
+
+function modelAngleLimits(axis, activeModel = model, direction = modelDirections[axis]) {
+    const [min, max] = jointLimits(axis, activeModel);
+    return direction === 1 ? [min - SERVO_CENTER, max - SERVO_CENTER] : [SERVO_CENTER - max, SERVO_CENTER - min];
+}
+
+function makePlanarIk(activeModel, directions) {
+    const limits = Object.fromEntries(AXES.map((port, axis) => [port, modelAngleLimits(axis, activeModel, directions?.[axis] ?? 1)]));
+    return createPlanarIk(activeModel, SERVO_CENTER, limits);
+}
+
+function commandLimitIssue(targets) {
+    for (const [axis, degrees] of targets) {
+        const [min, max] = jointLimits(axis);
+        const command = Math.round(degrees * 100) / 100;
+        if (command < min || command > max) return `${AXES[axis]} 的舵机目标须在 ${min}° 到 ${max}° 之间`;
+    }
+    return null;
+}
+
 function renderModel() {
     if (!model) return;
     const ports = model.joints.map(joint => AXES.indexOf(joint.port));
@@ -174,6 +199,8 @@ function planarTargets({ angles, yaw, roll }) {
 
 function planarMotionIssue(ik, targets) {
     if (ik !== planarIk) return { reason: '模型已更换，请重新选点' };
+    const limitIssue = commandLimitIssue(targets);
+    if (limitIssue) return { reason: limitIssue };
     if (!feedbackFresh()) return { reason: '等待串口反馈后可发送' };
     const disabled = targets.filter(([axis]) => !latest[axis].enabled).map(([axis]) => AXES[axis]);
     if (disabled.length) return { reason: `发送前请使能 ${disabled.join('、')} 的 PWM` };
@@ -254,9 +281,10 @@ function updateSpatialTarget() {
             : null;
         const pose = planarIk.solveSpatial(world, pitch, sliceYaw, true, near);
         const geometric = pose?.angles ? null : planarIk.solveSpatial(world, pitch, sliceYaw, false, near);
-        let issue = pose?.angles ? null : (pitch === null ? '当前位置未找到可行姿态' : '当前夹爪俯仰下不可达');
-        if (geometric?.angles) issue = planarIk.collisionAt(geometric.angles);
+        let issue = pose?.angles ? null : (pitch === null ? '当前点在关节限位内不可达' : '当前俯仰在关节限位内不可达');
+        if (geometric?.angles) issue = planarIk.collisionAt(geometric.angles) ?? issue;
         if (roll !== null && (!Number.isFinite(roll) || Math.abs(roll) > SERVO_CENTER)) issue = '工具滚转须在 −135° 到 135° 之间，或留空';
+        if (!issue && pose?.angles) issue = commandLimitIssue(planarTargets({ ...pose, roll }));
         const displayPose = geometric?.angles ? { ...geometric, angles: null } : pose;
         planarSelection = { ...displayPose, world, roll, issue };
         if (displayPose) sliceYaw = displayPose.sliceYaw;
@@ -401,7 +429,7 @@ function sendTargets(targets, label, complete = accepted => finishTargets(target
             for (const [axis, targetDeg] of targets) latest[axis] = { ...latest[axis], targetDeg };
         }
         complete(accepted);
-    }, validate);
+    }, () => commandLimitIssue(targets) ?? validate?.());
 }
 
 function setModelTargets(targets, label) {
@@ -505,8 +533,9 @@ modelAngle.addEventListener('pointercancel', () => {
 reverseButton.addEventListener('click', () => {
     modelDirections[selected] *= -1;
     modelDraft = null;
-    if (planarSelection) planarSelection.sent = false;
-    updateControls();
+    planarIk = makePlanarIk(model, modelDirections);
+    if (planarSelection) updateSpatialTarget();
+    else updateControls();
     renderModel();
 });
 
@@ -540,7 +569,8 @@ planarSend.addEventListener('click', () => {
 function loadModel(data) {
     const measured = readModel(data);
     if (!measured) return;
-    const ik = createPlanarIk(measured, SERVO_CENTER);
+    if (data.commandLimits === undefined && model) measured.commandLimits = model.commandLimits;
+    const ik = makePlanarIk(measured);
     model = measured;
     planarIk = ik;
     planarSelection = null;

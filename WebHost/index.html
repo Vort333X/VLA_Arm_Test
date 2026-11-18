@@ -167,7 +167,7 @@
         if (location.protocol === 'file:') {
             startupError('请通过本地服务打开 http://127.0.0.1:8765/');
         } else {
-            import('./app.mjs?v=auto-pitch-1').catch(error => {
+            import('./app.mjs?v=joint-limits-1').catch(error => {
                 console.error(error);
                 startupError(`网页脚本加载失败 · ${error.message}`);
             });

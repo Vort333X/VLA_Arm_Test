@@ -33,7 +33,17 @@ export function readModel(data) {
         }
         return { name, port, point, axis: scale(axis, 1 / length), adc };
     });
-    return { joints, tcp: data.tcp, collision: data.collision };
+    const commandLimits = data.commandLimits === undefined ? {} : data.commandLimits;
+    if (!commandLimits || typeof commandLimits !== 'object' || Array.isArray(commandLimits)) {
+        throw new Error('commandLimits 应按轴号填写命令角范围');
+    }
+    for (const [port, range] of Object.entries(commandLimits)) {
+        if (!AXES.includes(port) || !Array.isArray(range) || range.length !== 2 || !range.every(Number.isFinite) ||
+            range[0] < 0 || range[0] > range[1] || range[1] > 270) {
+            throw new Error(`${port} 的命令角限位无效`);
+        }
+    }
+    return { joints, tcp: data.tcp, collision: data.collision, commandLimits };
 }
 
 function rotate(point, joint, angle) {
